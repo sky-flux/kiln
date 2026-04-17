@@ -5,7 +5,7 @@
 | 项 | 值 |
 |---|---|
 | 技术栈定位 | Java 25 LTS + Spring Boot 4.0 + jOOQ + PostgreSQL 18 + Redis 8 |
-| 项目架构 | monorepo 多模块单体(Modular Monolith),单一 app 启动入口 |
+| 项目架构 | **Modular Monolith + DDD(模块化单体 + 领域驱动)**,每个限界上下文内部采用六边形(Ports & Adapters)分层 |
 | 适用场景 | 政府信息化、国企 B 端 SaaS、金融对公系统、招投标项目 |
 | 数据访问策略 | **Database First**(先设计 SQL,后生成 Java 代码) |
 | 并发模型 | **Virtual Threads**(Project Loom) |
@@ -35,6 +35,7 @@
 16. [测试策略](#十六测试策略)
 17. [容器化与部署](#十七容器化与部署)
 18. [附录](#十八附录)
+19. [领域驱动设计:DDD + 六边形 + Clean Architecture](#十九领域驱动设计ddd--六边形--clean-architecture)
 
 ---
 
@@ -183,6 +184,10 @@ dependencies {
 ## 三、项目结构与构建配置
 
 ### 3.1 monorepo 多模块单体
+
+> **⚠️ 架构分级提示**:本节给出的 `api/domain/repo/internal/` 是**简化版**包结构,适用于 Supporting / Generic 子域(见 [第 19 章](#十九领域驱动设计ddd--六边形--clean-architecture) 核心域分级)。
+>
+> **Core Domain(如 `order`、`payment`)请采用第 19 章的完整六边形结构** `domain/application/adapter/config/`,带聚合根、Port/Adapter 分离、ArchUnit 守护依赖方向。两套结构的迁移映射见 **19.18**。
 
 **一个 Gradle 工程,多个 Gradle 子模块,一个可启动应用**。
 
@@ -10928,4 +10933,1200 @@ codegen from-db \
 - JobRunr: https://www.jobrunr.io/en/documentation/
 - Sa-Token: https://sa-token.cc/
 - hutool: https://hutool.cn/docs/
+
+---
+
+## 十九、领域驱动设计:DDD + 六边形 + Clean Architecture
+
+> **本章定位**:前 17 章是**工程实施规范**,本章是**方法论**。
+>
+> 前面章节告诉你"用什么技术、配置怎么写、代码放哪个包",本章告诉你"为什么这样组织、边界画在哪、什么时候该抽象"。
+>
+> 本章把三种互为补充的架构哲学整合到 Kiln 项目的同一套实现上:
+>
+> - **DDD(Domain-Driven Design)** — 方法论,回答"设计什么"
+> - **六边形架构(Ports & Adapters)** — 架构风格,回答"层次如何组织"
+> - **Clean Architecture** — 架构风格,回答"依赖指向哪个方向"
+>
+> 三者不是竞争关系,而是三个视角看同一件事。
+
+### 19.1 三种范式的关系:一张地形图
+
+| 范式 | 提出者 | 核心关注 | Kiln 项目中的落点 |
+|------|--------|---------|------------------|
+| **DDD** | Eric Evans(2003) | 业务语言、限界上下文、聚合 | 战略设计 + 战术设计全覆盖 |
+| **Hexagonal** | Alistair Cockburn(2005) | 领域与 I/O 隔离 | 每个 Bounded Context 内部的包结构 |
+| **Clean Architecture** | Robert C. Martin(2012) | 依赖方向单向内指 | 跨层依赖约束 + ArchUnit 检查 |
+
+三者的关系图:
+
+```mermaid
+flowchart LR
+    subgraph DDD["DDD(方法论)"]
+        BC[Bounded Context<br/>限界上下文]
+        AGG[Aggregate<br/>聚合]
+        VO[Value Object<br/>值对象]
+        DE[Domain Event<br/>领域事件]
+    end
+
+    subgraph HEX["Hexagonal(分层)"]
+        D[Domain 领域层]
+        A[Application 应用层]
+        ADA[Adapter 适配器层]
+    end
+
+    subgraph CLEAN["Clean(依赖规则)"]
+        DR["Dependency Rule<br/>依赖只能内指"]
+    end
+
+    BC -.对应.-> D
+    AGG -.位于.-> D
+    VO -.位于.-> D
+    DE -.跨越.-> A
+    DR -.约束.-> HEX
+```
+
+**一句话总结**:**DDD 决定"长什么样",Hexagonal 决定"怎么摆放",Clean 决定"谁能依赖谁"**。
+
+### 19.2 依赖方向的黄金法则(The Dependency Rule)
+
+整个架构只有一条硬约束:**依赖只能指向内层,永远不能反过来**。
+
+```mermaid
+flowchart TB
+    subgraph OUT["外层(易变)"]
+        FR["Frameworks &amp; Drivers<br/>Spring / jOOQ / Tomcat"]
+    end
+    subgraph ADA["适配器层"]
+        WEB["Web Controller"]
+        PER["jOOQ Repository"]
+        HTTP["HTTP Client"]
+    end
+    subgraph APP["应用层"]
+        UC["Use Case"]
+        PORT["Port(接口)"]
+    end
+    subgraph DOM["领域层(稳定)"]
+        AG["Aggregate"]
+        V["Value Object"]
+        DE["Domain Event"]
+    end
+
+    OUT --> ADA
+    ADA --> APP
+    APP --> DOM
+```
+
+**规则**:
+
+- ✅ `adapter/` 可以 `import` `application/` 和 `domain/`
+- ✅ `application/` 可以 `import` `domain/`
+- ❌ `domain/` **不允许** `import` `application/`、`adapter/`、Spring、jOOQ、Jackson、Servlet
+- ❌ `application/` **不允许** `import` 具体 adapter 实现(只能依赖 `application/port/out/` 接口)
+
+**为什么这样规定**:
+
+- 领域层(核心业务规则)**最稳定** — 几十年不变(记账就是借贷平衡,千年不变)
+- 框架层**最易变** — Spring 大版本每 2 年一换,jOOQ / Jackson 的 API 随时演进
+- 反过来依赖 = 让最稳定的东西被最易变的东西绑架 = 每次框架升级都要改业务代码
+
+### 19.3 统一语言(Ubiquitous Language)
+
+**原则**:业务专家、产品经理、开发者、DBA **共用同一套词汇**。
+
+这套词汇必须同时出现在:
+
+1. 需求文档
+2. API 路径与参数名(`POST /api/v1/orders`,不是 `POST /api/v1/create-new-business-entity`)
+3. Java 类 / 方法 / 变量名
+4. 数据库表名 / 列名
+5. 测试用例名
+6. 日志 / 埋点事件名
+7. 工单 / bug 描述
+
+**反例**:
+
+| 业务方说 | 需求文档写 | Controller 写 | Service 方法名 | 表名 | 后果 |
+|---------|-----------|--------------|--------------|------|------|
+| "发货" | "物流起运" | `ShipmentController` | `dispatchOrderItem()` | `t_logistics_event` | 4 个同义词,新人永远搞不清谁是谁 |
+
+**正例**:
+
+| 业务方说 | 文档 | Controller | Service | 表 |
+|---------|------|-----------|---------|-----|
+| "发货" | "发货" | `ShipmentController.ship()` | `OrderService.ship(OrderId)` | `shipments` |
+
+**落地约束**:
+
+- 每个 Bounded Context 维护一份 `GLOSSARY.md` 或在 `design.md` 里专门开一节
+- 禁止使用技术化隐喻代替业务语言(`handler` / `processor` / `manager` / `helper` 是重灾区)
+- 跨 BC 沟通时,显式说明对方用的是哪个 BC 的 "订单"(电商订单 vs 工单)
+
+### 19.4 战略设计:限界上下文(Bounded Context)
+
+#### 19.4.1 定义
+
+**限界上下文是 DDD 里最重要的战略概念**:在一个明确的业务边界内,术语、模型、规则是**统一且自洽**的;跨越边界,同一个词可以有不同含义。
+
+**经典例子**:"客户" 在:
+
+- **销售 BC**:有联系人、需求、报价单、意向等级
+- **售后 BC**:有工单、SLA、设备序列号
+- **财务 BC**:有开票主体、税号、信用额度
+
+强行统一成一个 `Customer` 类就是"上帝对象" — 所有业务改动都要改这个类,最终成为 Big Ball of Mud。**正确做法是让每个 BC 拥有自己的 `Customer` 类**,通过事件或 ACL 进行集成。
+
+#### 19.4.2 在 Kiln 项目上:BC = Spring Modulith 模块
+
+**一个 Gradle 子模块 = 一个 `package-info.java` 声明的 `@ApplicationModule` = 一个 Bounded Context**。
+
+边界通过 `ApplicationModules.verify()` 单测强制,跨 BC 调用必须:
+
+1. 通过 REST API(内部 HTTP,ACL 场景)
+2. 通过 Spring `ApplicationEvent`(异步领域事件,推荐)
+3. 或依赖对方 BC 的**公开 API 包**(`api/` 子包,Modulith 标注为模块门面)
+
+不允许:
+
+- 直接 `@Autowired` 对方的内部 Service
+- `import` 对方 `domain/model/` 的聚合根
+- 共享数据库表的直接读写
+
+#### 19.4.3 反模式
+
+```
+× UserController, UserService, UserRepository  —— 按技术分层命名,不是 BC
+× Module-a, Module-b  —— 无业务语义的命名
+× Common(什么都往里塞)  —— 跨 BC 共享内核失控
+```
+
+### 19.5 Context Map:9 种集成模式
+
+Context Map 是描述 **BC 之间集成关系**的图。Kiln 项目采用下列 9 种模式中的若干种:
+
+```mermaid
+flowchart LR
+    subgraph Core["Core Domain"]
+        Order["Order BC"]
+        Payment["Payment BC"]
+    end
+
+    subgraph Support["Supporting"]
+        User["User BC"]
+        Notif["Notification BC"]
+    end
+
+    subgraph Generic["Generic"]
+        Auth["Auth BC"]
+        Dict["Dict BC"]
+        Audit["Audit BC"]
+    end
+
+    subgraph Shared["Shared Kernel"]
+        Common["common:<br/>Money / PageQuery"]
+    end
+
+    subgraph ACL["Anti-Corruption Layer"]
+        WechatPay["WechatPayProvider"]
+        Alipay["AlipayProvider"]
+    end
+
+    Order -- "published event<br/>OrderCreated" --> User
+    Order -- "customer/supplier<br/>port" --> Payment
+    Payment -- "ACL" --> WechatPay
+    Payment -- "ACL" --> Alipay
+    Order -.-> Common
+    User -.-> Common
+    Payment -.-> Common
+    User -- "OHS + Published Language<br/>REST API" --> Order
+```
+
+**9 种集成模式对照表**:
+
+| 模式 | 中文 | Kiln 项目上的例子 | 何时使用 |
+|------|------|------------------|----------|
+| **Shared Kernel** | 共享内核 | `common/result/PageQuery`、`common/money/Money` | 极少数真正跨 BC 稳定的值对象;代价:任何改动影响所有 BC |
+| **Customer/Supplier** | 客户/供应商 | `order` 消费 `user`;下游可以向上游提需求 | 两团队有合作意愿 |
+| **Conformist** | 跟随者 | `payment` 模块适配微信支付 APIv3 的 JSON 结构 | 上游无视下游,只能硬吞 |
+| **Anticorruption Layer(ACL)** | 反腐层 | `payment/adapter/out/wechat/WechatPayProvider` 翻译微信脏模型 → 本域纯模型 | 上游模型污染大 |
+| **Open Host Service(OHS)** | 开放主机服务 | REST API `/api/v1/users` 给多个消费者 | 一个 BC 被多个其他 BC/外部调用 |
+| **Published Language** | 发布语言 | OpenAPI 契约(springdoc 生成) | 配合 OHS,定义稳定协议 |
+| **Separate Ways** | 各行其道 | `audit` 与 `dict` 模块无集成 | 两个 BC 没有业务关联 |
+| **Partnership** | 合作 | `order` 与 `payment` 团队共同演进 PaymentPort 契约 | 双向依赖 + 协同演进 |
+| **Big Ball of Mud** | 大泥球 | 历史系统里混在一起的遗留代码 | **反模式**,识别后立即用 ACL 隔离 |
+
+### 19.6 核心域 / 支撑子域 / 通用子域
+
+DDD 把所有 BC 按**对业务的战略价值**分三级:
+
+| 子域类型 | 特征 | 投入程度 | Kiln 项目示例 | 架构严格度 |
+|---------|------|---------|--------------|-----------|
+| **Core Domain** 核心域 | 公司赚钱的核心能力,外部买不到 | **最高**:最资深工程师、最多投入 | `order`、`payment`(若自研)、业务独有逻辑模块 | **严格 DDD + 完整六边形** |
+| **Supporting Subdomain** 支撑子域 | 支持核心业务,但非核心竞争力 | 中等:能买就买 | `user`、`notification`、`file` | 简化 DDD(可合并 `service` 和 `usecase`) |
+| **Generic Subdomain** 通用子域 | 所有公司都一样,商品化成熟 | **最低**:能用现成方案就用 | `auth`、`dict`、`audit`、`tenant` | **直接 CRUD**,不用 DDD |
+
+**规则**:
+
+- **不要在通用子域上过度设计** — `auth/` 用 Sa-Token + 数据库表就够了,别整聚合根
+- **不要在核心域上偷懒** — `order/`、`payment/` 必须用聚合根 + 领域事件,不能直接 `OrderRepository.save(orderEntity)`
+- **支撑子域灵活处理** — 按团队能力和项目周期平衡
+
+### 19.7 战术设计:聚合(Aggregate)
+
+#### 19.7.1 定义
+
+**聚合是一组一致性边界内的实体和值对象的集合**,有一个唯一的**聚合根(Aggregate Root)** 作为对外入口。
+
+聚合的作用:**保证业务不变式(Invariant)在事务内不被破坏**。
+
+**例**:`Order` 聚合
+
+- 根:`Order`
+- 内部实体:`OrderItem[]`
+- 值对象:`Money`, `ShippingAddress`, `OrderStatus`
+- 不变式:`totalAmount == sum(items.subtotal)` 必须恒成立
+
+如果不用聚合,两个请求可能同时修改 `Order` 的 items 列表,导致 `totalAmount` 和实际数据不一致。
+
+#### 19.7.2 聚合的四条黄金规则
+
+```mermaid
+flowchart TD
+    A[聚合根 Order] --> B[OrderItem 1]
+    A --> C[OrderItem 2]
+    A --> D[ShippingAddress]
+
+    E[另一个聚合 User] -.只能持有 ID.-> A
+
+    F[Repository] --> A
+
+    style A fill:#4a90e2
+    style E fill:#aaa
+```
+
+| 规则 | 内容 | 违反后果 |
+|------|------|---------|
+| **1. 通过根访问** | 外部只能引用根(`Order`),不能直接引用内部实体(`OrderItem`) | 不变式被绕过,数据不一致 |
+| **2. 一个事务 = 一个聚合** | 一次 `@Transactional` 只能修改一个聚合实例 | 分布式死锁;长事务性能崩溃 |
+| **3. 跨聚合用 ID 引用** | `Order` 持有 `UserId`,不持有 `User` 对象 | 加载一个聚合加载半个数据库;延迟加载陷阱 |
+| **4. 跨聚合用事件最终一致** | `Order` 支付成功 → 发 `OrderPaid` → `User` 模块异步加积分 | 事务边界过大,失败回滚地狱 |
+
+#### 19.7.3 聚合根的 Java 代码模板
+
+```java
+// <bc>/domain/model/Order.java
+package com.example.myapp.order.domain.model;
+
+import com.example.myapp.common.money.Money;
+import com.example.myapp.order.domain.event.DomainEvent;
+import com.example.myapp.order.domain.event.OrderCreated;
+import com.example.myapp.order.domain.event.OrderPaid;
+import com.example.myapp.order.domain.exception.IllegalOrderStateException;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+
+public final class Order {
+
+    private final OrderId id;
+    private final UserId userId;
+    private final List<OrderItem> items;
+    private final ShippingAddress shippingAddress;
+    private OrderStatus status;
+    private final Instant createdAt;
+    private Instant paidAt;
+
+    // 暂存的领域事件,应用层拉取后发布
+    private final List<DomainEvent> events = new ArrayList<>();
+
+    // 私有构造器,强制走静态工厂
+    private Order(OrderId id, UserId userId, List<OrderItem> items,
+                  ShippingAddress addr, OrderStatus status, Instant createdAt) {
+        this.id = Objects.requireNonNull(id);
+        this.userId = Objects.requireNonNull(userId);
+        this.items = new ArrayList<>(items);
+        this.shippingAddress = Objects.requireNonNull(addr);
+        this.status = Objects.requireNonNull(status);
+        this.createdAt = Objects.requireNonNull(createdAt);
+
+        // 在构造期就验证业务不变式
+        if (items.isEmpty()) {
+            throw new IllegalOrderStateException("订单必须至少有一个商品项");
+        }
+    }
+
+    // ─────────── 静态工厂:创建新聚合 ───────────
+    public static Order create(UserId userId, List<OrderItem> items,
+                               ShippingAddress addr) {
+        var order = new Order(OrderId.newId(), userId, items, addr,
+                              OrderStatus.PENDING, Instant.now());
+        order.events.add(new OrderCreated(order.id, order.userId, order.totalAmount(),
+                                          order.createdAt));
+        return order;
+    }
+
+    // ─────────── 静态工厂:从持久化重建聚合 ───────────
+    public static Order reconstitute(OrderId id, UserId userId, List<OrderItem> items,
+                                     ShippingAddress addr, OrderStatus status,
+                                     Instant createdAt, Instant paidAt) {
+        var order = new Order(id, userId, items, addr, status, createdAt);
+        order.paidAt = paidAt;
+        // 重建路径不发事件 —— 事件已经在第一次创建时发过了
+        return order;
+    }
+
+    // ─────────── 业务行为(领域方法)───────────
+    public void pay() {
+        if (status != OrderStatus.PENDING) {
+            throw new IllegalOrderStateException(
+                    "订单状态 %s,不能支付".formatted(status));
+        }
+        this.status = OrderStatus.PAID;
+        this.paidAt = Instant.now();
+        this.events.add(new OrderPaid(id, userId, totalAmount(), paidAt));
+    }
+
+    public void cancel(String reason) {
+        if (status == OrderStatus.PAID || status == OrderStatus.SHIPPED) {
+            throw new IllegalOrderStateException(
+                    "已支付或已发货订单不能直接取消,需走退款流程");
+        }
+        this.status = OrderStatus.CANCELLED;
+    }
+
+    // ─────────── 查询(派生状态,不改变聚合)───────────
+    public Money totalAmount() {
+        return items.stream()
+                .map(OrderItem::subtotal)
+                .reduce(Money.zero(items.get(0).unitPrice().currency()), Money::add);
+    }
+
+    // ─────────── 领域事件接口 ───────────
+    public List<DomainEvent> pullEvents() {
+        var copy = List.copyOf(events);
+        events.clear();
+        return copy;
+    }
+
+    // ─────────── Getter(不暴露内部集合的可变引用)───────────
+    public OrderId id() { return id; }
+    public UserId userId() { return userId; }
+    public List<OrderItem> items() { return Collections.unmodifiableList(items); }
+    public OrderStatus status() { return status; }
+    public Instant createdAt() { return createdAt; }
+    public Instant paidAt() { return paidAt; }
+}
+```
+
+**要点**:
+
+- `final class` + 私有构造器 + 静态工厂 — 保证不变式在构造期就被验证
+- 领域方法(`pay()` / `cancel()`)**返回 void 或 this**,不返回数据传输对象
+- 事件暂存在聚合内,由应用层在事务提交后拉取并发布
+- 不提供 `setXxx()` —— 所有状态变更必须走业务方法
+- 不依赖 Spring、不依赖 jOOQ、不依赖 Jackson
+
+#### 19.7.4 聚合大小:小为美
+
+**征兆一个聚合太大**:
+
+- 超过 3 层嵌套(根 → 子实体 → 孙实体)
+- 加载一次 > 50 个对象
+- 两个团队经常同时改同一个聚合,频繁合并冲突
+- 事务锁冲突率 > 5%
+
+**拆分策略**:
+
+- 按业务事务频率拆 — 经常一起变的放一起,不一起变的拆开
+- 跨聚合的数据一致性交给领域事件,不追求强一致
+
+### 19.8 战术设计:值对象(Value Object)
+
+#### 19.8.1 6 条判定清单
+
+一个类该是值对象还是实体?过这个清单:
+
+```mermaid
+flowchart TD
+    Q1{有稳定的<br/>唯一 identity?} --Yes--> E[实体]
+    Q1 --No--> Q2{不可变?<br/>构造后永不改}
+    Q2 --No--> F[先改成不可变再判]
+    Q2 --Yes--> Q3{相等性由<br/>属性值决定?}
+    Q3 --No--> E
+    Q3 --Yes--> Q4{可以自由替换<br/>同值的另一实例?}
+    Q4 --No--> E
+    Q4 --Yes--> Q5{无独立生命周期<br/>依附某个实体?}
+    Q5 --No--> E
+    Q5 --Yes--> V[值对象 ✓]
+
+    style V fill:#4a90e2
+    style E fill:#888
+```
+
+6 条全部命中才是值对象;任意一条不确定,优先判为实体。
+
+#### 19.8.2 值对象的 Java 代码模板
+
+Java 25 下**默认首选 `record`**:
+
+```java
+// common/money/Money.java
+package com.example.myapp.common.money;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Currency;
+import java.util.Objects;
+
+public record Money(BigDecimal amount, Currency currency) {
+
+    // Compact constructor 做 invariant 校验
+    public Money {
+        Objects.requireNonNull(amount, "amount");
+        Objects.requireNonNull(currency, "currency");
+        if (amount.scale() > currency.getDefaultFractionDigits()) {
+            throw new IllegalArgumentException(
+                    "amount scale %d exceeds %s fraction digits %d"
+                            .formatted(amount.scale(), currency,
+                                       currency.getDefaultFractionDigits()));
+        }
+    }
+
+    // 静态工厂
+    public static Money of(String amount, String currencyCode) {
+        return new Money(new BigDecimal(amount), Currency.getInstance(currencyCode));
+    }
+
+    public static Money zero(Currency currency) {
+        return new Money(
+                BigDecimal.ZERO.setScale(
+                        currency.getDefaultFractionDigits(), RoundingMode.UNNECESSARY),
+                currency);
+    }
+
+    // 领域行为:返回新值对象,不修改 self
+    public Money add(Money other) {
+        requireSameCurrency(other);
+        return new Money(amount.add(other.amount), currency);
+    }
+
+    public Money subtract(Money other) {
+        requireSameCurrency(other);
+        return new Money(amount.subtract(other.amount), currency);
+    }
+
+    public Money multiply(BigDecimal factor) {
+        return new Money(
+                amount.multiply(factor).setScale(
+                        currency.getDefaultFractionDigits(), RoundingMode.HALF_EVEN),
+                currency);
+    }
+
+    public boolean isPositive() { return amount.signum() > 0; }
+    public boolean isZero() { return amount.signum() == 0; }
+
+    private void requireSameCurrency(Money other) {
+        if (!currency.equals(other.currency)) {
+            throw new IllegalArgumentException(
+                    "Cannot operate on %s and %s".formatted(currency, other.currency));
+        }
+    }
+}
+```
+
+**要点**:
+
+- `record` 自动生成 `equals()` / `hashCode()` / `toString()`,默认按所有组件值比较
+- Compact constructor 做 invariant 校验 — 不合法的值对象**不允许存在**
+- 领域行为返回**新实例**,原实例不被修改(不可变性)
+- 静态工厂方法(`of()` / `zero()`)优于 `new` — 可读性 + 可替换实现
+
+#### 19.8.3 值对象 vs 实体 对照表
+
+| 维度 | 值对象 | 实体 |
+|------|--------|------|
+| Identity | 无 | 有稳定 ID |
+| 相等性 | 按属性值 | 按 ID |
+| 可变性 | 不可变 | 可变 |
+| 生命周期 | 短,依附实体 | 独立 |
+| 替换 | 可自由替换 | 不可替换 |
+| Java 实现 | `record` | `class` + ID 字段 |
+| 典型例子 | `Money`, `Address`, `PhoneNumber`, `DateRange` | `User`, `Order`, `Product` |
+
+#### 19.8.4 典型值对象库(建议放 `common/`)
+
+| 值对象 | 所属包 | 用途 |
+|-------|--------|------|
+| `Money(amount, currency)` | `common.money` | 货币金额 |
+| `PhoneNumber(countryCode, number)` | `common.contact` | 手机号 |
+| `EmailAddress(value)` | `common.contact` | 邮箱 |
+| `IdCardNumber(value)` | `common.identity` | 身份证号(校验位) |
+| `DateRange(start, end)` | `common.time` | 日期区间 |
+| `GpsLocation(lat, lng)` | `common.geo` | GPS 坐标 |
+
+注意:只有**真正跨 BC 稳定**的值对象才放 `common/`。BC 内部的值对象(如 `OrderStatus`)放在 BC 自己的 `domain/model/`。
+
+### 19.9 战术设计:领域事件(Domain Event)
+
+#### 19.9.1 设计规则
+
+1. **命名必须是过去时** — `OrderPaid`,不是 `PayOrder`(那是命令)
+2. **载荷最小** — 只放 ID、时间、必要上下文;不放整个聚合
+3. **不可变** — Java `record`
+4. **可被序列化** — 为了能走消息队列或存事件表
+5. **用 `sealed interface` 收拢** — 一个 BC 的所有事件列出来,穷尽匹配
+
+#### 19.9.2 Java 代码模板
+
+```java
+// order/domain/event/DomainEvent.java
+package com.example.myapp.order.domain.event;
+
+import java.time.Instant;
+
+public sealed interface DomainEvent
+        permits OrderCreated, OrderPaid, OrderCancelled, OrderShipped {
+    Instant occurredAt();
+}
+
+// order/domain/event/OrderPaid.java
+import com.example.myapp.common.money.Money;
+import com.example.myapp.order.domain.model.OrderId;
+import com.example.myapp.order.domain.model.UserId;
+
+public record OrderPaid(
+        OrderId orderId,
+        UserId userId,
+        Money amount,
+        Instant occurredAt
+) implements DomainEvent {}
+```
+
+#### 19.9.3 发布:Spring Events + ApplicationModuleListener
+
+```java
+// order/adapter/out/messaging/OrderEventPublisher.java
+@Component
+class OrderEventPublisher {
+    private final ApplicationEventPublisher publisher;
+
+    public OrderEventPublisher(ApplicationEventPublisher publisher) {
+        this.publisher = publisher;
+    }
+
+    void publishAll(List<DomainEvent> events) {
+        events.forEach(publisher::publishEvent);
+    }
+}
+```
+
+#### 19.9.4 订阅:跨 BC 消费
+
+```java
+// user/adapter/in/event/OrderEventListener.java
+@Component
+class OrderEventListener {
+
+    private final AddLoyaltyPointsUseCase addPoints;
+
+    public OrderEventListener(AddLoyaltyPointsUseCase addPoints) {
+        this.addPoints = addPoints;
+    }
+
+    // Spring Modulith 的 @ApplicationModuleListener:
+    // - 自动 @Async(虚拟线程执行)
+    // - 自动 @Transactional(propagation = REQUIRES_NEW)
+    // - 事件发布方事务提交后才执行
+    @ApplicationModuleListener
+    void on(OrderPaid event) {
+        addPoints.execute(event.userId(), event.amount());
+    }
+}
+```
+
+#### 19.9.5 事务边界与事件发布的时序
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant UC as PayOrderUseCase
+    participant O as Order<br/>(聚合根)
+    participant R as OrderRepository
+    participant EP as EventPublisher
+    participant L as OrderEventListener<br/>(User BC)
+
+    C->>UC: pay(orderId)
+    activate UC
+    Note over UC: @Transactional begin
+    UC->>R: load(orderId)
+    R-->>UC: Order
+    UC->>O: pay()
+    O->>O: status = PAID<br/>events.add(OrderPaid)
+    UC->>R: save(order)
+    UC->>EP: publish(order.pullEvents())
+    Note over UC: @Transactional commit
+    deactivate UC
+    Note over EP,L: 事务提交后 Spring 异步派发
+    EP->>L: OrderPaid
+    activate L
+    L->>L: addLoyaltyPoints()
+    deactivate L
+```
+
+### 19.10 六边形架构:Ports & Adapters 的完整落地
+
+#### 19.10.1 端口的两个方向
+
+| 方向 | Port(接口) | Adapter(实现) | 谁调谁 |
+|------|------------|---------------|--------|
+| **Inbound** 入站 | `CreateOrderUseCase`(应用服务接口) | `OrderController`(Web adapter) | Adapter 调 Port |
+| **Outbound** 出站 | `OrderRepository`(领域视角的持久化接口) | `OrderJooqRepositoryAdapter`(jOOQ 实现) | 应用层调 Port,Adapter 实现 Port |
+
+```mermaid
+flowchart LR
+    subgraph IN["入站适配器"]
+        Web["REST Controller"]
+        Ev["Event Listener"]
+        Sch["Scheduled Job"]
+    end
+
+    subgraph CORE["领域 + 应用(核心六边形)"]
+        InPort["入站端口<br/>UseCase 接口"]
+        UC["UseCase 实现"]
+        DOM["Domain Model"]
+        OutPort["出站端口<br/>Repository/Gateway 接口"]
+    end
+
+    subgraph OUT["出站适配器"]
+        JOOQ["jOOQ Repository"]
+        HTTP["HTTP Client"]
+        Msg["Event Publisher"]
+    end
+
+    Web --> InPort
+    Ev --> InPort
+    Sch --> InPort
+    InPort --> UC
+    UC --> DOM
+    UC --> OutPort
+    OutPort --> JOOQ
+    OutPort --> HTTP
+    OutPort --> Msg
+```
+
+#### 19.10.2 推荐包结构(替代旧版 3.1 的 `api/domain/repo/internal/`)
+
+```
+<bounded-context>/                     # Gradle 子模块
+└── src/main/java/com/example/myapp/<bc>/
+    ├── domain/                         # 领域层(零框架依赖)
+    │   ├── model/                      # Aggregates, Entities, Value Objects
+    │   │   ├── Order.java              # 聚合根
+    │   │   ├── OrderItem.java          # 聚合内实体
+    │   │   ├── OrderId.java            # ID 类型(record)
+    │   │   ├── OrderStatus.java        # enum
+    │   │   └── ShippingAddress.java    # 值对象
+    │   ├── event/                      # 领域事件
+    │   │   ├── DomainEvent.java        # sealed interface
+    │   │   ├── OrderCreated.java
+    │   │   └── OrderPaid.java
+    │   ├── service/                    # 领域服务(跨聚合的纯业务规则)
+    │   │   └── OrderPricingService.java
+    │   └── exception/                  # 领域异常
+    │       └── IllegalOrderStateException.java
+    │
+    ├── application/                    # 应用层(协调器,定义端口)
+    │   ├── port/
+    │   │   ├── in/                     # 入站端口(UseCase 接口)
+    │   │   │   ├── CreateOrderUseCase.java
+    │   │   │   ├── PayOrderUseCase.java
+    │   │   │   └── CancelOrderUseCase.java
+    │   │   └── out/                    # 出站端口(Gateway/Repository 接口)
+    │   │       ├── OrderRepository.java          # 持久化接口
+    │   │       ├── PaymentGateway.java           # 外部支付接口
+    │   │       └── NotificationSender.java       # 外部通知接口
+    │   └── usecase/                    # UseCase 实现(事务边界在这一层)
+    │       ├── CreateOrderService.java
+    │       ├── PayOrderService.java
+    │       └── CancelOrderService.java
+    │
+    ├── adapter/                        # 适配器层
+    │   ├── in/                         # 入站(外部 → 系统)
+    │   │   ├── web/                    # REST Controller + Request/Response DTOs
+    │   │   │   ├── OrderController.java
+    │   │   │   ├── CreateOrderRequest.java
+    │   │   │   ├── OrderResponse.java
+    │   │   │   └── dto/                 # 仅当 DTO ≥ 5 个时开此子包(否则扁平)
+    │   │   │       └── ...
+    │   │   ├── event/                  # 消费其他 BC 的事件
+    │   │   │   └── PaymentEventListener.java
+    │   │   └── job/                    # 定时触发
+    │   │       └── OrderTimeoutJob.java
+    │   └── out/                        # 出站(系统 → 外部)
+    │       ├── persistence/            # jOOQ 实现 OrderRepository
+    │       │   ├── OrderJooqRepositoryAdapter.java
+    │       │   └── OrderMapper.java    # jOOQ Record ↔ Order 聚合
+    │       ├── messaging/              # 发布本 BC 的事件
+    │       │   └── OrderEventPublisher.java
+    │       └── http/                   # 调外部服务
+    │           └── ShippingHttpAdapter.java
+    │
+    └── config/                         # Spring 装配
+        ├── OrderModuleConfig.java
+        └── OrderProperties.java
+```
+
+#### 19.10.3 UseCase + Port 的 Java 代码模板
+
+**入站端口(应用服务接口)**:
+
+```java
+// order/application/port/in/PayOrderUseCase.java
+package com.example.myapp.order.application.port.in;
+
+import com.example.myapp.order.domain.model.OrderId;
+
+public interface PayOrderUseCase {
+    void execute(Command command);
+
+    record Command(OrderId orderId, String paymentChannel) {}
+}
+```
+
+**出站端口(领域视角的接口)**:
+
+```java
+// order/application/port/out/OrderRepository.java
+package com.example.myapp.order.application.port.out;
+
+import com.example.myapp.order.domain.model.Order;
+import com.example.myapp.order.domain.model.OrderId;
+
+import java.util.Optional;
+
+public interface OrderRepository {
+    Optional<Order> findById(OrderId id);
+    void save(Order order);
+}
+```
+
+**UseCase 实现**:
+
+```java
+// order/application/usecase/PayOrderService.java
+package com.example.myapp.order.application.usecase;
+
+import com.example.myapp.order.application.port.in.PayOrderUseCase;
+import com.example.myapp.order.application.port.out.OrderRepository;
+import com.example.myapp.order.application.port.out.PaymentGateway;
+import com.example.myapp.order.domain.model.Order;
+import com.example.myapp.common.exception.AppException;
+import com.example.myapp.common.exception.AppCode;
+
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+class PayOrderService implements PayOrderUseCase {
+
+    private final OrderRepository orderRepo;
+    private final PaymentGateway payment;
+    private final ApplicationEventPublisher events;
+
+    PayOrderService(OrderRepository orderRepo, PaymentGateway payment,
+                    ApplicationEventPublisher events) {
+        this.orderRepo = orderRepo;
+        this.payment = payment;
+        this.events = events;
+    }
+
+    @Override
+    @Transactional
+    public void execute(Command cmd) {
+        Order order = orderRepo.findById(cmd.orderId())
+                .orElseThrow(() -> new AppException(AppCode.NOT_FOUND));
+
+        // 调外部支付(出站适配器)
+        payment.charge(cmd.orderId(), order.totalAmount(), cmd.paymentChannel());
+
+        // 调用领域行为,聚合内部改状态 + 产生事件
+        order.pay();
+
+        // 持久化
+        orderRepo.save(order);
+
+        // 发布领域事件(事务提交后异步派发)
+        order.pullEvents().forEach(events::publishEvent);
+    }
+}
+```
+
+**Web 适配器(入站)**:
+
+```java
+// order/adapter/in/web/OrderController.java
+package com.example.myapp.order.adapter.in.web;
+
+import com.example.myapp.order.application.port.in.PayOrderUseCase;
+import com.example.myapp.order.domain.model.OrderId;
+import com.example.myapp.common.result.R;
+
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/orders")
+class OrderController {
+
+    private final PayOrderUseCase payOrder;
+
+    OrderController(PayOrderUseCase payOrder) {
+        this.payOrder = payOrder;
+    }
+
+    @PostMapping("/{orderId}/pay")
+    public R<Void> pay(@PathVariable String orderId,
+                       @RequestBody PayOrderRequest req) {
+        payOrder.execute(new PayOrderUseCase.Command(
+                OrderId.of(orderId), req.channel()));
+        return R.ok();
+    }
+}
+```
+
+**jOOQ 适配器(出站)**:
+
+```java
+// order/adapter/out/persistence/OrderJooqRepositoryAdapter.java
+package com.example.myapp.order.adapter.out.persistence;
+
+import com.example.myapp.order.application.port.out.OrderRepository;
+import com.example.myapp.order.domain.model.Order;
+import com.example.myapp.order.domain.model.OrderId;
+import com.example.myapp.order.infra.jooq.generated.tables.Orders;
+
+import org.jooq.DSLContext;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+class OrderJooqRepositoryAdapter implements OrderRepository {
+
+    private final DSLContext dsl;
+    private final OrderMapper mapper;
+
+    OrderJooqRepositoryAdapter(DSLContext dsl, OrderMapper mapper) {
+        this.dsl = dsl;
+        this.mapper = mapper;
+    }
+
+    @Override
+    public Optional<Order> findById(OrderId id) {
+        var record = dsl.selectFrom(Orders.ORDERS)
+                .where(Orders.ORDERS.ID.eq(id.value()))
+                .fetchOptional();
+        return record.map(mapper::toAggregate);
+    }
+
+    @Override
+    public void save(Order order) {
+        // UPSERT 实现略
+        mapper.toRecord(order).store();
+    }
+}
+```
+
+**关键点**:
+
+- `PayOrderService` 在 `application/usecase/` 下,不在 `domain/`
+- `OrderRepository` 接口在 `application/port/out/`,实现在 `adapter/out/persistence/`
+- 领域事件由 `Order` 聚合产生,`PayOrderService` 发布,`ApplicationEventPublisher` 派发
+- Controller 完全不知道聚合,只知道 UseCase + DTO
+
+### 19.11 Clean Architecture 的四层映射
+
+Robert C. Martin 的 Clean Architecture 四层与 Hexagonal 的对应:
+
+```mermaid
+flowchart TB
+    subgraph L1["Entities(企业业务规则)"]
+        E[domain/model/<br/>domain/service/]
+    end
+    subgraph L2["Use Cases(应用业务规则)"]
+        U[application/usecase/<br/>application/port/]
+    end
+    subgraph L3["Interface Adapters"]
+        A[adapter/in/<br/>adapter/out/]
+    end
+    subgraph L4["Frameworks &amp; Drivers"]
+        F[Spring / jOOQ /<br/>Tomcat / Redis]
+    end
+
+    L4 --> L3
+    L3 --> L2
+    L2 --> L1
+```
+
+| Clean 层 | Hexagonal | Kiln 包 |
+|----------|-----------|---------|
+| Entities | Domain | `<bc>/domain/model/`, `<bc>/domain/service/` |
+| Use Cases | Application | `<bc>/application/usecase/`, `<bc>/application/port/` |
+| Interface Adapters | Adapters | `<bc>/adapter/in/`, `<bc>/adapter/out/` |
+| Frameworks & Drivers | — | `infra/`, 第三方库 |
+
+### 19.12 用 ArchUnit 硬约束依赖方向
+
+仅靠人工 review 守不住 Clean Rule,用 **ArchUnit** 写单测自动检查:
+
+```groovy
+// <bc>/build.gradle
+testImplementation 'com.tngtech.archunit:archunit-junit5:1.3.0'
+```
+
+```java
+// <bc>/src/test/java/.../ArchitectureTest.java
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+import org.junit.jupiter.api.Test;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+class ArchitectureTest {
+
+    private static final com.tngtech.archunit.core.domain.JavaClasses CLASSES =
+            new ClassFileImporter().importPackages("com.example.myapp.order");
+
+    @Test
+    void domainHasNoSpringDependencies() {
+        noClasses().that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.springframework..",
+                        "jakarta.persistence..",
+                        "jakarta.servlet..",
+                        "org.jooq..",
+                        "com.fasterxml.jackson..")
+                .check(CLASSES);
+    }
+
+    @Test
+    void domainDoesNotDependOnApplication() {
+        noClasses().that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat().resideInAPackage("..application..")
+                .check(CLASSES);
+    }
+
+    @Test
+    void applicationDoesNotDependOnAdapter() {
+        noClasses().that().resideInAPackage("..application..")
+                .should().dependOnClassesThat().resideInAPackage("..adapter..")
+                .check(CLASSES);
+    }
+}
+```
+
+**CI 失败 = PR 被拦下**,强制所有人遵守依赖规则。
+
+### 19.13 领域异常 vs 应用异常 vs 基础设施异常
+
+| 层 | 异常类型 | 例子 | 处理策略 |
+|----|---------|------|---------|
+| **Domain** | 领域异常 | `IllegalOrderStateException` | `RuntimeException` 子类,不捕获,让它冒泡 |
+| **Application** | 应用异常 | `AppException(AppCode.NOT_FOUND)` | 在 UseCase 里用 `AppCode` 表达业务错误 |
+| **Infrastructure** | 基础设施异常 | `DataAccessException`(jOOQ) | 在 Adapter 层翻译成领域/应用异常,**不泄漏到上层** |
+
+**反例**:
+
+```java
+// ❌ UseCase 捕获 jOOQ 异常 — adapter 的异常泄漏到 application 层
+@Override
+@Transactional
+public void execute(Command cmd) {
+    try {
+        orderRepo.save(order);
+    } catch (DataAccessException e) {   // 不应该出现在这里
+        throw new AppException(...);
+    }
+}
+```
+
+**正例**:
+
+```java
+// ✓ Adapter 捕获 jOOQ 异常并翻译
+@Override
+public void save(Order order) {
+    try {
+        mapper.toRecord(order).store();
+    } catch (DataAccessException e) {
+        throw new OrderPersistenceException(order.id(), e);
+    }
+}
+```
+
+### 19.14 数据库设计与聚合的对应
+
+**规则**:**一张表不能跨多个聚合**。
+
+| 聚合根 | 主表 | 聚合内子表 | 跨聚合引用 |
+|-------|------|-----------|-----------|
+| `Order` | `orders` | `order_items`(`order_id` FK)| `user_id`(仅存 ID,不 JOIN) |
+| `User` | `users` | `user_addresses` | — |
+| `Payment` | `payments` | `payment_notifications` | `order_id`(仅 ID) |
+
+**反模式**:
+
+- ❌ 在 `orders` 表上直接 JOIN `users` 展示订单列表(跨聚合访问)
+- ✅ 正确做法:`OrderListQuery` 读模型(CQRS 读侧)独立,走只读 SQL 或物化视图
+
+### 19.15 jOOQ Record 不暴露到 domain
+
+jOOQ 生成的 `Record` 是**持久化模型**,不是**领域模型**。必须在 `adapter/out/persistence/` 做双向映射:
+
+```java
+// order/adapter/out/persistence/OrderMapper.java
+@Component
+class OrderMapper {
+
+    Order toAggregate(OrdersRecord r) {
+        return Order.reconstitute(
+                OrderId.of(r.getId()),
+                UserId.of(r.getUserId()),
+                loadItems(r.getId()),
+                new ShippingAddress(r.getShippingAddress()),
+                OrderStatus.valueOf(r.getStatus()),
+                r.getCreatedAt(),
+                r.getPaidAt()
+        );
+    }
+
+    OrdersRecord toRecord(Order order) {
+        OrdersRecord r = new OrdersRecord();
+        r.setId(order.id().value());
+        r.setUserId(order.userId().value());
+        r.setStatus(order.status().name());
+        r.setTotalAmount(order.totalAmount().amount());
+        r.setCurrency(order.totalAmount().currency().getCurrencyCode());
+        r.setCreatedAt(order.createdAt());
+        r.setPaidAt(order.paidAt());
+        return r;
+    }
+}
+```
+
+### 19.16 反腐层(ACL):第 3.2 节的 DDD 语义
+
+第 3.2 节的"**门面 + provider**"模式,在 DDD 术语里就是 **Anti-Corruption Layer**:
+
+```mermaid
+flowchart LR
+    subgraph Order["Order BC(纯净)"]
+        OUC[PayOrderService]
+        PG[PaymentGateway<br/>出站端口]
+    end
+
+    subgraph Payment["Payment BC"]
+        PS[PaymentService 门面]
+        subgraph ACL["ACL:WechatPayProvider"]
+            WPP[翻译脏模型]
+            WSDK[wechatpay-java<br/>官方 SDK]
+        end
+    end
+
+    subgraph WX["微信支付系统(外部)"]
+        WAPI[APIv3 JSON 结构]
+    end
+
+    OUC --> PG
+    PG -.实现.-> PS
+    PS --> WPP
+    WPP --> WSDK
+    WSDK --> WAPI
+```
+
+**ACL 的职责**:
+
+1. **协议翻译** — 微信的 `out_trade_no` 字段 → 本域 `PaymentId`
+2. **模型翻译** — 微信的 JSON 嵌套结构 → 本域 `PayResult` 值对象
+3. **异常翻译** — `WechatApiException` → `PaymentChannelException`
+4. **隔离变化** — 微信 API 版本升级只影响 ACL,不影响 Order BC
+
+### 19.17 DDD 的分级采用:Kiln 现有模块分类
+
+基于 19.6 的核心/支撑/通用子域理论,Kiln 项目的现有模块建议分级:
+
+| 模块 | 分类 | 建议架构严格度 | 原因 |
+|------|------|--------------|------|
+| `order` | Core Domain | 严格 Hexagonal + 聚合根 + 领域事件 + ArchUnit | 订单是电商/SaaS 的核心竞争力 |
+| `payment` | Core(但 ACL 重) | Hexagonal + 每个支付厂商独立 ACL + 资金一致性校验 | 真金白银,错一分钱都是事故 |
+| `product` | Core | 严格 Hexagonal(若是电商);Supporting(若是中台) | 视业务定位 |
+| `workflow` | Core 或 Supporting | 严格 Hexagonal(若流程是产品差异化);Flowable 直接用(若流程是运营工具) | 视业务 |
+| `user` | Supporting | 简化 Hexagonal(可合并 `service` 和 `usecase`) | 用户管理通用,可买可用 |
+| `notification` | Supporting | ACL 模式(多通道) + 简化 UseCase | 通道厂商多,但业务逻辑浅 |
+| `file` | Supporting | ACL 模式(多云存储)| 同上 |
+| `auth` | Generic | **直接 CRUD + Sa-Token**,不需要 DDD | 认证授权是标准化能力 |
+| `audit` | Generic | 直接 CRUD + AOP 拦截 | 审计逻辑固定 |
+| `dict` | Generic | 直接 CRUD + Redis 缓存 | 字典就是键值对 |
+| `tenant` | Generic | 直接 CRUD + 上下文 Filter | 多租户是基础设施 |
+
+**规则**:
+
+- **Core Domain 不允许图省事** — 一定要有聚合根,否则几年后核心业务代码变成泥潭
+- **Generic Subdomain 不允许过度设计** — 字典模块写成 4 层 Hexagonal 是自杀
+- **Supporting 看团队** — 人手充足可以上 Hexagonal,紧张就合并层次
+
+### 19.18 与前面章节的关系(Diff 式说明)
+
+本章提出的结构与前面章节的对应关系:
+
+| 前面章节 | 本章的再定位 |
+|---------|-------------|
+| **3.1 模块结构** | 每个 BC 内部的 `api/domain/repo/internal/` **升级为** `domain/application/adapter/config/`(见 19.10.2 完整目录) |
+| **3.2 门面 + provider** | **命名为** Anti-Corruption Layer 模式 |
+| **3.5 模块依赖方向** | 由 "横切能力 → 平台层" **细化为** "adapter → application → domain,严格单向,ArchUnit 守护" |
+| **5.5 Domain 模型** | 升级为**聚合根** + `static reconstitute()` + 业务方法;jOOQ Record 放在 `adapter/out/persistence/` |
+| **5.6 Repository 层** | `Repository` 接口放在 `application/port/out/`;jOOQ 实现放在 `adapter/out/persistence/` |
+| **14.3 业务异常** | 拆分为 Domain 异常 / Application 异常 / Infrastructure 异常,各司其职 |
+| **16.11 Modulith 测试** | 保持,额外增加 ArchUnit 测试(本章 19.12) |
+| **3.15 @ApplicationModule** | 保持,`allowedDependencies` 的语义就是 Context Map 的形式化 |
+
+### 19.19 迁移路径:从旧结构到新结构
+
+对已按 3.1 旧结构写的代码,分阶段迁移(**不要一次性重构**):
+
+| 阶段 | 动作 | 风险 |
+|------|------|------|
+| **1. 新 BC 直接用新结构** | 未来的业务模块按本章结构创建 | 低 |
+| **2. 添加 ArchUnit 测试(宽松)** | 先跑在新 BC,旧 BC 加 `@Disabled` 或 `// TODO` | 低 |
+| **3. 旧 BC 局部重构** | 挑一个最活跃的核心域(如 `order`),拆 `api/` → `adapter/in/web/`,`repo/` → `adapter/out/persistence/` | 中 |
+| **4. 统一启用 ArchUnit** | 所有 BC 通过检查,PR 门槛提升 | 中 |
+| **5. 引入聚合根** | 找到最重要的实体(Order / Payment),改造为聚合根 + 领域事件 | 高 |
+
+**不做**:
+
+- 不一次性重构所有模块 — 大爆炸式重构 90% 会失败
+- 不强制 Generic 子域采用 DDD — 浪费人力
+- 不重命名不改结构只为"好看" — 没业务价值
+
+### 19.20 本章不覆盖的主题(建议延伸阅读)
+
+以下 DDD 高级主题本章不展开,留给团队按需深入:
+
+- **CQRS(Command Query Responsibility Segregation)** — 读写模型分离,适合读写负载差异巨大的场景
+- **Event Sourcing** — 以事件流作为状态真相源,适合审计强需求、金融场景;代价高
+- **Saga 模式** — 跨聚合/跨 BC 的长事务编排,与 Flowable 工作流有重叠
+- **领域特定语言(DSL)** — 用 Kotlin DSL / Java Fluent API 建模业务规则
+
+**推荐参考资料**:
+
+- Eric Evans《Domain-Driven Design》(2003) — 蓝皮书,战略+战术完整理论
+- Vaughn Vernon《Implementing Domain-Driven Design》(2013) — 红皮书,大量代码示例
+- Vladimir Khorikov《Domain Modeling Made Functional》 — F# 视角,对 Java 的 `record` + `sealed` 启发巨大
+- Tom Hombergs《Get Your Hands Dirty on Clean Architecture》 — 六边形架构 Java 实战
+- Robert C. Martin《Clean Architecture》 — Clean 的理论基础
+
+---
 
