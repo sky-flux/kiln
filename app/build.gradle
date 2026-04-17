@@ -20,6 +20,11 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
     testImplementation 'org.testcontainers:postgresql:1.21.3'
+
+    // Phase 4: Sa-Token session store backed by Redis needs a Redis container in tests.
+    // `com.redis:testcontainers-redis` provides @ServiceConnection-aware RedisContainer.
+    // Not transitive from infra:testImplementation, so declare it here explicitly.
+    testImplementation 'com.redis:testcontainers-redis:2.2.4'
 }
 
 bootJar {

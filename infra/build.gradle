@@ -38,8 +38,32 @@ dependencies {
     api 'org.springframework.boot:spring-boot-testcontainers'
     api 'org.testcontainers:postgresql:1.21.3'
 
-    // Phase 4+: Redis, Redisson, Spring Security, Sa-Token
-    // Phase 6+: JobRunr, Flowable, BouncyCastle
+    // Phase 4: Redis, Sa-Token, BouncyCastle (Argon2id)
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
+    // Redisson deferred to Phase 5+ (distributed locks). Adding the Boot 3
+    // starter on the Boot 4 classpath would require an autoconfigure exclude
+    // because 3.52.0 hard-references `RedisAutoConfiguration` which Boot 4
+    // renamed to `DataRedisAutoConfiguration`. No business code in Phase 4
+    // consumes Redisson primitives, so dropping the dep is cleaner than
+    // shipping 10MB of unused bytecode plus a workaround.
+
+    // Sa-Token "spring-boot3" starter is the latest published line; it works with Boot 4
+    // because Sa-Token hooks Spring Web MVC interceptors — not the autoconfig that
+    // got split in Boot 4.
+    api 'cn.dev33:sa-token-spring-boot3-starter:1.45.0'
+    api 'cn.dev33:sa-token-redis-jackson:1.45.0'   // Redis persistence for Sa-Token
+    // `@SaCheckLogin` / `@SaCheckPermission` / `@SaCheckRole` on controller methods
+    // are AOP-driven. Without this artifact the annotations are silently no-ops —
+    // requests pass straight through to the controller. The spring-boot3-starter
+    // does NOT pull this transitively.
+    api 'cn.dev33:sa-token-spring-aop:1.45.0'
+
+    api 'org.bouncycastle:bcprov-jdk18on:1.80'
+
+    // Testcontainers Redis — uses generic container + @ServiceConnection (Boot 4)
+    testImplementation 'com.redis:testcontainers-redis:2.2.4'
+
+    // Phase 6+: JobRunr, Flowable
 }
 
 jooq {

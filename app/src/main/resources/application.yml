@@ -59,6 +59,20 @@ management:
     tags:
       application: ${spring.application.name}
 
+# Sa-Token (Phase 4) — session lives in Redis (via sa-token-redis-jackson on
+# classpath), token is read from the standard HTTP `Authorization: Bearer <...>`
+# header. Defaults without this block are `satoken` / no-prefix — explicit here
+# so the HTTP contract matches conventional clients.
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  # 30-day session TTL; refresh on activity 15 min
+  timeout: 2592000
+  active-timeout: 900
+  is-concurrent: true
+  is-share: false
+  is-log: false
+
 logging:
   level:
     root: INFO
