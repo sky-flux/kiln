@@ -35,6 +35,9 @@ application-local.properties
 /data/
 .env
 
+# Git worktrees
+.worktrees/
+
 # Claude Code skills — unpacked skill content is reproducible from
 # skills-lock.json via `/reload-plugins`. Commit the lock file, ignore
 # the unpacked directories (analogous to package-lock.json vs node_modules/).
