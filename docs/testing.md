@@ -3,20 +3,21 @@
 > 本文档是 Kiln 项目的**测试方法论**。
 >
 > - 和 [`design.md`](./design.md) Ch 16 的关系:那边是"选什么栈",本文是"**怎么用、什么时候用、用在哪一层**"。
-> - 和 [`CLAUDE.md`](../CLAUDE.md) 的 TDD 章节的关系:CLAUDE.md 是项目约定(规则条文),本文是这些规则**背后的原理 + 实操模板**。
+> - 和 [`CLAUDE.md`](../CLAUDE.md) 的 TDD 章节的关系:CLAUDE.md 是项目约定(规则条文),本文是这些规则**背后的原理 + 实操模板
+    **。
 > - 适用对象:新加入 Kiln 项目的工程师、外部贡献者、以及使用 Agent Teams 完成 Phase 的 Claude。
 
 ## 核心信息
 
-| 项 | 值 |
-|---|---|
-| 哲学 | 金字塔形测试分布 + Hexagonal 分层驱动 + 4-gate Phase 流程 |
-| 主力栈 | JUnit 5.13+ / AssertJ 3.26+ / Mockito 5.14+ / Testcontainers 1.21.3 |
+| 项         | 值                                                                                |
+|-----------|----------------------------------------------------------------------------------|
+| 哲学        | 金字塔形测试分布 + Hexagonal 分层驱动 + 4-gate Phase 流程                                      |
+| 主力栈       | JUnit 5.13+ / AssertJ 3.26+ / Mockito 5.14+ / Testcontainers 1.21.3              |
 | Spring 测试 | `@WebMvcTest` / `@DataJooqTest` slice + `@SpringBootTest` + `@ServiceConnection` |
-| 架构验证 | ArchUnit 1.3(Hexagonal 层界)+ Spring Modulith 2.0(模块边界) |
-| 质量度量 | JaCoCo 0.8.12(行/分支覆盖)+ PIT 1.15(mutation)|
-| TDD 强度 | Strict Red-Green-Refactor for any class with behavior;skeletons exempt |
-| 4-gate 流程 | **Gate 1** TDD 绿 → **Gate 2** review → **Gate 3** fix-all → **Gate 4** commit |
+| 架构验证      | ArchUnit 1.3(Hexagonal 层界)+ Spring Modulith 2.0(模块边界)                            |
+| 质量度量      | JaCoCo 0.8.12(行/分支覆盖)+ PIT 1.15(mutation)                                        |
+| TDD 强度    | Strict Red-Green-Refactor for any class with behavior;skeletons exempt           |
+| 4-gate 流程 | **Gate 1** TDD 绿 → **Gate 2** review → **Gate 3** fix-all → **Gate 4** commit    |
 
 ---
 
@@ -48,7 +49,8 @@
 
 1. **测试是第一等公民,不是"补的"** — 每个有行为的类都必须有一个先失败的测试,否则不进 main。
 2. **金字塔形状** — unit 多、integration 少、e2e 更少。倒金字塔(大量 e2e 压住一两个 unit)= 慢 + 脆弱。
-3. **每种测试只捕它擅长捕的 bug** — domain 的分支逻辑用 unit 测,别去 integration 里测;DB 的 UPSERT 语义用 Testcontainers 测,别在 unit 里 mock jOOQ。
+3. **每种测试只捕它擅长捕的 bug** — domain 的分支逻辑用 unit 测,别去 integration 里测;DB 的 UPSERT 语义用 Testcontainers
+   测,别在 unit 里 mock jOOQ。
 4. **测试代码也是代码** — 有代码异味的测试 = 技术债。Code review 时测试文件和生产代码同等审查。
 5. **没跑过的绿测试 = 没测试** — 覆盖率(JaCoCo)告诉你代码真的被执行了。
 6. **没 kill 过 mutation 的绿测试 = 形式主义** — 用 PIT 检查你的断言是否真的**区分**对错。
@@ -79,40 +81,41 @@
 
 ### 维度 A:范围(纵向)
 
-| 范围 | 一次测什么 | 成本 | 示例 |
-|---|---|---|---|
-| **Unit** | 一个类,无 Spring context | 毫秒级 | `UserTest`、`MoneyTest`、`Argon2idPasswordServiceTest` |
-| **Slice** | 部分 Spring context(一层) | 秒级 | `@WebMvcTest UserController`、`@DataJooqTest` |
+| 范围              | 一次测什么                       | 成本  | 示例                                                    |
+|-----------------|-----------------------------|-----|-------------------------------------------------------|
+| **Unit**        | 一个类,无 Spring context        | 毫秒级 | `UserTest`、`MoneyTest`、`Argon2idPasswordServiceTest`  |
+| **Slice**       | 部分 Spring context(一层)       | 秒级  | `@WebMvcTest UserController`、`@DataJooqTest`          |
 | **Integration** | 全栈 + 真实外部依赖(Testcontainers) | 十秒级 | `UserJooqRepositoryAdapterTest`、`KilnIntegrationTest` |
-| **E2E / 验收** | 端到端用户旅程(可跨服务) | 分钟级 | `KilnIntegrationTest` 的 register→login→authed-GET 串 |
+| **E2E / 验收**    | 端到端用户旅程(可跨服务)               | 分钟级 | `KilnIntegrationTest` 的 register→login→authed-GET 串   |
 
 ### 维度 B:目的(你**想测**什么)
 
-| 目的 | 问题 |
-|---|---|
-| **功能正确** | 给定输入,产出正确吗? |
-| **架构约束** | 依赖方向对吗?模块边界守住了吗? |
-| **并发安全** | 多线程下状态一致吗? |
-| **性能基线** | 响应时间 / 吞吐量在可接受范围? |
+| 目的        | 问题                              |
+|-----------|---------------------------------|
+| **功能正确**  | 给定输入,产出正确吗?                     |
+| **架构约束**  | 依赖方向对吗?模块边界守住了吗?                |
+| **并发安全**  | 多线程下状态一致吗?                      |
+| **性能基线**  | 响应时间 / 吞吐量在可接受范围?               |
 | **安全不变式** | 枚举攻击 / timing / 日志注入 / 密码明文不泄漏? |
-| **契约兼容** | 外部 API / DB schema 没破坏性变更? |
-| **可观测性** | 预期的日志 / 指标 / trace 真的被打了? |
+| **契约兼容**  | 外部 API / DB schema 没破坏性变更?      |
+| **可观测性**  | 预期的日志 / 指标 / trace 真的被打了?       |
 
 ### 维度 C:执行策略(**怎么跑**)
 
-| 策略 | 定义 | 工具 |
-|---|---|---|
-| **TDD** | 写代码前先写测试(红→绿→重构) | 见第 5 节 |
-| **Smoke** | 最低成本的"能启动吗" | `contextLoads` + actuator /health |
-| **Regression** | 为复现过的 bug 留下的测试 | 正常 unit/integration |
-| **Coverage** | 量化代码被执行的比例 | JaCoCo |
-| **Mutation** | 量化测试能**发现**错误的比例 | PIT |
-| **Property-based** | 成千上万随机输入验证不变式 | jqwik |
-| **Fuzz** | 畸形/恶意输入抗性 | Jazzer(Phase 6+)|
-| **Load / Stress** | 高并发下行为稳定吗 | k6 / Gatling / JMH |
-| **Chaos** | 故障注入下韧性 | Chaos Monkey(Phase 7+)|
+| 策略                 | 定义               | 工具                                |
+|--------------------|------------------|-----------------------------------|
+| **TDD**            | 写代码前先写测试(红→绿→重构) | 见第 5 节                            |
+| **Smoke**          | 最低成本的"能启动吗"      | `contextLoads` + actuator /health |
+| **Regression**     | 为复现过的 bug 留下的测试  | 正常 unit/integration               |
+| **Coverage**       | 量化代码被执行的比例       | JaCoCo                            |
+| **Mutation**       | 量化测试能**发现**错误的比例 | PIT                               |
+| **Property-based** | 成千上万随机输入验证不变式    | jqwik                             |
+| **Fuzz**           | 畸形/恶意输入抗性        | Jazzer(Phase 6+)                  |
+| **Load / Stress**  | 高并发下行为稳定吗        | k6 / Gatling / JMH                |
+| **Chaos**          | 故障注入下韧性          | Chaos Monkey(Phase 7+)            |
 
-**很重要的区分**:你提到的 "TDD、单元测试、覆盖率测试、集成测试、冒烟测试" — 其中 TDD / coverage / smoke 是**策略**,unit / integration 是**范围**,"覆盖率测试"严格说不是一种测试,是给测试打分的**工具**。把它们画进金字塔会得出错误结论。
+**很重要的区分**:你提到的 "TDD、单元测试、覆盖率测试、集成测试、冒烟测试" — 其中 TDD / coverage / smoke 是**策略**,unit /
+integration 是**范围**,"覆盖率测试"严格说不是一种测试,是给测试打分的**工具**。把它们画进金字塔会得出错误结论。
 
 ---
 
@@ -177,17 +180,18 @@
 
 ### 4.1 Domain 层(`<bc>/domain/`)
 
-| 属性 | 值 |
-|---|---|
-| 测试范围 | **Unit only**(禁止 slice / integration)|
-| 工具 | JUnit 5 + AssertJ。**禁用 Mockito**(domain 没有应该 mock 的依赖)|
-| Spring | **禁用** `@SpringBootTest` / `@WebMvcTest` 等 |
-| 覆盖率目标 | **≥ 90%**(JaCoCo 行)/ ≥ 85%(分支)|
-| PIT 目标 | Mutation score ≥ 80% |
-| 覆盖重点 | 聚合不变式、值对象边界、领域事件、domain exceptions |
-| TDD 强度 | **最强** — 每个 factory / 状态变更 / 业务方法都必须先红后绿 |
+| 属性     | 值                                                      |
+|--------|--------------------------------------------------------|
+| 测试范围   | **Unit only**(禁止 slice / integration)                  |
+| 工具     | JUnit 5 + AssertJ。**禁用 Mockito**(domain 没有应该 mock 的依赖) |
+| Spring | **禁用** `@SpringBootTest` / `@WebMvcTest` 等             |
+| 覆盖率目标  | **≥ 90%**(JaCoCo 行)/ ≥ 85%(分支)                         |
+| PIT 目标 | Mutation score ≥ 80%                                   |
+| 覆盖重点   | 聚合不变式、值对象边界、领域事件、domain exceptions                     |
+| TDD 强度 | **最强** — 每个 factory / 状态变更 / 业务方法都必须先红后绿               |
 
 **模板**:
+
 ```java
 class UserTest {
     @Test void registerNormalizesEmail() {
@@ -218,15 +222,16 @@ class UserTest {
 
 ### 4.2 Application / UseCase 层(`<bc>/application/usecase/`)
 
-| 属性 | 值 |
-|---|---|
-| 测试范围 | **Unit**(Mockito 模拟所有 port)|
-| 工具 | JUnit + AssertJ + Mockito 5 |
-| Spring | 不用(`@Service` 手动 `new`)|
-| 覆盖率目标 | ≥ 85% 行 / 75% 分支 |
-| 覆盖重点 | 编排逻辑、`@Transactional` 语义、事件发布顺序、异常翻译(infra → app exceptions) |
+| 属性     | 值                                                            |
+|--------|--------------------------------------------------------------|
+| 测试范围   | **Unit**(Mockito 模拟所有 port)                                  |
+| 工具     | JUnit + AssertJ + Mockito 5                                  |
+| Spring | 不用(`@Service` 手动 `new`)                                      |
+| 覆盖率目标  | ≥ 85% 行 / 75% 分支                                             |
+| 覆盖重点   | 编排逻辑、`@Transactional` 语义、事件发布顺序、异常翻译(infra → app exceptions) |
 
 **模板**(节选自 `RegisterUserServiceTest`):
+
 ```java
 @ExtendWith(MockitoExtension.class)
 class RegisterUserServiceTest {
@@ -253,6 +258,7 @@ class RegisterUserServiceTest {
 ```
 
 **典型断言维度**:
+
 - 调用关系(`verify(repo).save(any())`)
 - 事件发布顺序(事务后 vs 前)
 - 异常类型 + AppCode 正确
@@ -260,15 +266,16 @@ class RegisterUserServiceTest {
 
 ### 4.3 Adapter In — Web(`<bc>/adapter/in/web/`)
 
-| 属性 | 值 |
-|---|---|
-| 测试范围 | **Slice** (`@WebMvcTest(ControllerX.class)`)|
-| 工具 | MockMvc + `@MockitoBean`(Spring Test 6.2+ 替代 `@MockBean`)|
+| 属性     | 值                                                                           |
+|--------|-----------------------------------------------------------------------------|
+| 测试范围   | **Slice** (`@WebMvcTest(ControllerX.class)`)                                |
+| 工具     | MockMvc + `@MockitoBean`(Spring Test 6.2+ 替代 `@MockBean`)                   |
 | Spring | 最小 `@SpringBootConfiguration` + `@EnableAutoConfiguration` + component scan |
-| 覆盖率目标 | ≥ 75% |
-| 覆盖重点 | `@Valid` 验证、DTO ↔ JSON 序列化、Controller → UseCase 参数透传、状态码、响应 body 形状 |
+| 覆盖率目标  | ≥ 75%                                                                       |
+| 覆盖重点   | `@Valid` 验证、DTO ↔ JSON 序列化、Controller → UseCase 参数透传、状态码、响应 body 形状         |
 
 **模板**:
+
 ```java
 @WebMvcTest(UserController.class)
 class UserControllerTest {
@@ -303,19 +310,20 @@ class UserControllerTest {
 
 ### 4.4 Adapter Out — Persistence(`<bc>/adapter/out/persistence/`)
 
-| 属性 | 值 |
-|---|---|
-| 测试范围 | **Integration**(Testcontainers PG)|
-| 工具 | `@SpringBootTest` + `@ServiceConnection` + `PostgreSQLContainer` |
-| Spring | 需要真 DataSource + Flyway + jOOQ auto-config |
-| 覆盖率目标 | ≥ 70%(wiring 代码允许未覆盖)|
-| 覆盖重点 | SQL round-trip、UPSERT 语义、`DuplicateKeyException` 等异常、不变式(`upsertPreservesCreatedAt`)|
+| 属性     | 值                                                                                    |
+|--------|--------------------------------------------------------------------------------------|
+| 测试范围   | **Integration**(Testcontainers PG)                                                   |
+| 工具     | `@SpringBootTest` + `@ServiceConnection` + `PostgreSQLContainer`                     |
+| Spring | 需要真 DataSource + Flyway + jOOQ auto-config                                           |
+| 覆盖率目标  | ≥ 70%(wiring 代码允许未覆盖)                                                                |
+| 覆盖重点   | SQL round-trip、UPSERT 语义、`DuplicateKeyException` 等异常、不变式(`upsertPreservesCreatedAt`) |
 
 **模板**(节选自 `UserJooqRepositoryAdapterTest`):
+
 ```java
 @SpringBootTest(classes = UserJooqRepositoryAdapterTest.TestApp.class)
 class UserJooqRepositoryAdapterTest {
-    static final String POSTGRES_IMAGE = "postgres:18-alpine";
+    static final String POSTGRES_IMAGE = "postgres:18.3-alpine";
 
     @SpringBootApplication(exclude = {
             DataRedisAutoConfiguration.class,            // 本切片不测 Redis
@@ -334,56 +342,58 @@ class UserJooqRepositoryAdapterTest {
     void upsertPreservesCreatedAt() {
         User u = User.register("T", "t@x.com", "h");
         repo.save(u);
-        var ts1 = dsl.select(...).fetchOne(...);
+        var ts1 = dsl.select(...).fetchOne(...)
 
         Thread.sleep(10);
         repo.save(User.reconstitute(u.id(), "T2", "t@x.com", "h"));
-        var ts2 = dsl.select(...).fetchOne(...);
+        var ts2 = dsl.select(...).fetchOne(...)
 
         assertThat(ts2).isEqualTo(ts1);   // created_at immutable
     }
-}
+
 ```
 
 **关键决策**:
 
-- **为什么不用 `@DataJooqTest` 切片**?— `@DataJooqTest` 默认不加载 `UserMapper`(不在组件扫描内),绕路再 `@Import` 让代码变复杂。`@SpringBootTest` + 精细 `exclude` 更清晰。
+- **为什么不用 `@DataJooqTest` 切片**?— `@DataJooqTest` 默认不加载 `UserMapper`(不在组件扫描内),绕路再 `@Import` 让代码变复杂。
+  `@SpringBootTest` + 精细 `exclude` 更清晰。
 - **为什么 exclude Redis**?— 该 slice 只测持久化,Redis / Sa-Token 在这里是噪音 + 需要额外容器 + 拖慢测试。
 
 ### 4.5 Adapter Out — HTTP / Messaging
 
-| 属性 | 值 |
-|---|---|
-| 测试范围 | Unit(mock HTTP client)或 Integration(WireMock / 真服务)|
-| 工具 | Spring `RestClient` 测试 + WireMock stub |
-| 覆盖重点 | 序列化、错误翻译、重试、超时 |
+| 属性   | 值                                                   |
+|------|-----------------------------------------------------|
+| 测试范围 | Unit(mock HTTP client)或 Integration(WireMock / 真服务) |
+| 工具   | Spring `RestClient` 测试 + WireMock stub              |
+| 覆盖重点 | 序列化、错误翻译、重试、超时                                      |
 
 **Phase 4 暂未涉及**(Phase 5+ 引入 HTTP 客户端时补)。
 
 ### 4.6 Infra 层
 
-| 属性 | 值 |
-|---|---|
-| 测试范围 | 混合 — 配置类 unit / Filter slice / security unit |
-| 覆盖率目标 | ≥ 70% |
-| 覆盖重点 | `Argon2idPasswordService`(安全关键,unit)、`MdcFilter`(行为,单测 + 整合)、`GlobalExceptionHandler`(异常映射表,unit 逐条) |
+| 属性    | 值                                                                                                    |
+|-------|------------------------------------------------------------------------------------------------------|
+| 测试范围  | 混合 — 配置类 unit / Filter slice / security unit                                                         |
+| 覆盖率目标 | ≥ 70%                                                                                                |
+| 覆盖重点  | `Argon2idPasswordService`(安全关键,unit)、`MdcFilter`(行为,单测 + 整合)、`GlobalExceptionHandler`(异常映射表,unit 逐条) |
 
-**Wiring-heavy 类**(如 `RedisConfig`、`SpringDocConfig`)允许较低覆盖率 — 它们主要是 `@Bean` 方法,单元测试意义有限,一次 smoke `@SpringBootTest` 装配成功就够了。
+**Wiring-heavy 类**(如 `RedisConfig`、`SpringDocConfig`)允许较低覆盖率 — 它们主要是 `@Bean` 方法,单元测试意义有限,一次
+smoke `@SpringBootTest` 装配成功就够了。
 
 ### 4.7 按层的测试矩阵总结
 
-| 层 | 主测试类型 | 工具 | JaCoCo 下限 | PIT 下限 | 禁忌 |
-|---|---|---|---|---|---|
-| Domain model | Unit | JUnit+AssertJ | 90% | 80% | ❌ Spring / Mockito |
-| Domain service | Unit | JUnit+AssertJ | 90% | 80% | ❌ Spring |
-| Application usecase | Unit | JUnit+AssertJ+Mockito | 85% | 75% | ❌ 真 DB |
-| Application port(interface) | 无 | — | — | — | 接口本身无行为 |
-| Adapter in web | Slice | `@WebMvcTest` | 75% | 60% | ❌ `@SpringBootTest` 全栈 |
-| Adapter in event | Slice 或 unit | Mockito | 75% | 60% | — |
-| Adapter out persistence | Integration | Testcontainers | 70% | 50% | ❌ 无 `@ServiceConnection` |
-| Adapter out http | Unit + WireMock | WireMock / MockRestServiceServer | 70% | 50% | ❌ 打真第三方 |
-| Infra config | Smoke | `@SpringBootTest` | 50% | — | — |
-| Infra security | Unit | JUnit+AssertJ | 85% | 75% | ❌ 跳过 constant-time 测试 |
+| 层                           | 主测试类型           | 工具                               | JaCoCo 下限 | PIT 下限 | 禁忌                       |
+|-----------------------------|-----------------|----------------------------------|-----------|--------|--------------------------|
+| Domain model                | Unit            | JUnit+AssertJ                    | 90%       | 80%    | ❌ Spring / Mockito       |
+| Domain service              | Unit            | JUnit+AssertJ                    | 90%       | 80%    | ❌ Spring                 |
+| Application usecase         | Unit            | JUnit+AssertJ+Mockito            | 85%       | 75%    | ❌ 真 DB                   |
+| Application port(interface) | 无               | —                                | —         | —      | 接口本身无行为                  |
+| Adapter in web              | Slice           | `@WebMvcTest`                    | 75%       | 60%    | ❌ `@SpringBootTest` 全栈   |
+| Adapter in event            | Slice 或 unit    | Mockito                          | 75%       | 60%    | —                        |
+| Adapter out persistence     | Integration     | Testcontainers                   | 70%       | 50%    | ❌ 无 `@ServiceConnection` |
+| Adapter out http            | Unit + WireMock | WireMock / MockRestServiceServer | 70%       | 50%    | ❌ 打真第三方                  |
+| Infra config                | Smoke           | `@SpringBootTest`                | 50%       | —      | —                        |
+| Infra security              | Unit            | JUnit+AssertJ                    | 85%       | 75%    | ❌ 跳过 constant-time 测试    |
 
 ---
 
@@ -392,26 +402,26 @@ class UserJooqRepositoryAdapterTest {
 ### 5.1 Red → Green → Refactor 的细节
 
 1. **Red** — 写一条最小的、失败的测试
-   - 一个 test 方法对应一个行为(不是一个方法对应一个 test)
-   - 命名用业务语义(`registerNormalizesEmail`,不是 `test1`)
-   - 跑它,**看它红**。没看到就是没走过 TDD。
-   - Compile error **不算** red — 修掉 typo 再算。
+    - 一个 test 方法对应一个行为(不是一个方法对应一个 test)
+    - 命名用业务语义(`registerNormalizesEmail`,不是 `test1`)
+    - 跑它,**看它红**。没看到就是没走过 TDD。
+    - Compile error **不算** red — 修掉 typo 再算。
 2. **Green** — 写最少的代码让它绿
-   - 不要顺手加 "while I'm here" 的功能
-   - 不要加没测到的 public method
-   - 跑测试 + 跑全部测试(不要破坏其他)
+    - 不要顺手加 "while I'm here" 的功能
+    - 不要加没测到的 public method
+    - 跑测试 + 跑全部测试(不要破坏其他)
 3. **Refactor** — 清理代码,不动行为
-   - 提取公共方法、重命名变量、合并重复
-   - 每一步后跑测试确认还绿
-   - 不要在 red 状态下重构(你会失去 safety net)
+    - 提取公共方法、重命名变量、合并重复
+    - 每一步后跑测试确认还绿
+    - 不要在 red 状态下重构(你会失去 safety net)
 
 ### 5.2 新建文件 vs 修改现有文件的 TDD
 
-| 场景 | 做法 |
-|---|---|
-| 新类 | 先建测试文件(空 class)→ 写第一个 @Test(引用不存在的类 → 编译错)→ 让它编译错好 → 建目标类 → 写 impl 让测试 red 转绿 |
+| 场景        | 做法                                                                                            |
+|-----------|-----------------------------------------------------------------------------------------------|
+| 新类        | 先建测试文件(空 class)→ 写第一个 @Test(引用不存在的类 → 编译错)→ 让它编译错好 → 建目标类 → 写 impl 让测试 red 转绿                 |
 | 修改现有类加新方法 | 先在测试文件加 `@Test foo()` 调用 `target.foo(...)` → 编译错 → 加 method signature 返回默认值 → test red → impl |
-| 修 bug | 先写一条能**重现 bug** 的测试(会 red)→ 修代码 → test 绿 |
+| 修 bug     | 先写一条能**重现 bug** 的测试(会 red)→ 修代码 → test 绿                                                      |
 
 ### 5.3 事后验证 TDD 合规(ctime 检查)
 
@@ -430,12 +440,12 @@ Phase 4 的 review agent 就是靠这招抓到 `AuthController` 没有 slice 测
 
 Kiln 的 Phase 结束条件不是"build 绿",而是 4 个 gate 全过:
 
-| Gate | 关测试的什么 |
-|---|---|
-| **1. TDD 实现** | `./gradlew build` 绿;每个新行为类有测试;skeleton 豁免 |
+| Gate               | 关测试的什么                                                                              |
+|--------------------|-------------------------------------------------------------------------------------|
+| **1. TDD 实现**      | `./gradlew build` 绿;每个新行为类有测试;skeleton 豁免                                           |
 | **2. Code review** | 派 `pr-review-toolkit:code-reviewer` 检查**测试质量**(ctime、断言强度、覆盖盲区、retroactive-test 征兆) |
-| **3. Fix all** | review 找到的**测试缺口**也必须补(C2 就是典型:缺 `AuthControllerTest`)。修复每条 finding 时也走 TDD(红→绿→重构) |
-| **4. Commit** | commit 前必须跑 `./gradlew build` 最后一次。Stop hook 挡住未 commit 的改动 |
+| **3. Fix all**     | review 找到的**测试缺口**也必须补(C2 就是典型:缺 `AuthControllerTest`)。修复每条 finding 时也走 TDD(红→绿→重构) |
+| **4. Commit**      | commit 前必须跑 `./gradlew build` 最后一次。Stop hook 挡住未 commit 的改动                         |
 
 **Gate 2 能问出的测试特定问题**:
 
@@ -450,61 +460,61 @@ Kiln 的 Phase 结束条件不是"build 绿",而是 4 个 gate 全过:
 
 ### 7.1 核心测试
 
-| 工具 | 版本 | 来源 | 目的 |
-|---|---|---|---|
-| JUnit Jupiter | 5.13+ | `spring-boot-starter-test` 传递 | 核心测试引擎 |
-| AssertJ | 3.26+ | 同上 | 流畅断言,取代 `Assert.assertEquals` |
-| Mockito | 5.14+ | 同上 | mock / spy / `MockedStatic<T>` |
-| Mockito JUnit 5 | — | 同上 | `@ExtendWith(MockitoExtension.class)` |
-| `@MockitoBean` | Spring Test 6.2+ / Boot 4 | 内置 | 替代旧 `@MockBean`,自动 reset |
+| 工具              | 版本                        | 来源                            | 目的                                    |
+|-----------------|---------------------------|-------------------------------|---------------------------------------|
+| JUnit Jupiter   | 5.13+                     | `spring-boot-starter-test` 传递 | 核心测试引擎                                |
+| AssertJ         | 3.26+                     | 同上                            | 流畅断言,取代 `Assert.assertEquals`         |
+| Mockito         | 5.14+                     | 同上                            | mock / spy / `MockedStatic<T>`        |
+| Mockito JUnit 5 | —                         | 同上                            | `@ExtendWith(MockitoExtension.class)` |
+| `@MockitoBean`  | Spring Test 6.2+ / Boot 4 | 内置                            | 替代旧 `@MockBean`,自动 reset              |
 
 ### 7.2 Spring 切片
 
-| 工具 | 来源 | 目的 |
-|---|---|---|
-| `@WebMvcTest` | **Boot 4: `spring-boot-webmvc-test`**(不在 `starter-test` 里)| MVC 控制器切片 |
-| `@DataJooqTest` | `spring-boot-jooq-test` | jOOQ 切片(本项目用全 `@SpringBootTest`,见 4.4) |
-| `@JsonTest` | `starter-test` 传递 | DTO 序列化专项 |
-| `RestTestClient` | `org.springframework.test.web.servlet.client.RestTestClient`(Spring Framework 7 包)| 集成 HTTP 客户端 |
-| `@AutoConfigureRestTestClient` | `spring-boot-resttestclient` 传递 | 让 `@SpringBootTest` 认出 RestTestClient |
+| 工具                             | 来源                                                                                 | 目的                                     |
+|--------------------------------|------------------------------------------------------------------------------------|----------------------------------------|
+| `@WebMvcTest`                  | **Boot 4: `spring-boot-webmvc-test`**(不在 `starter-test` 里)                         | MVC 控制器切片                              |
+| `@DataJooqTest`                | `spring-boot-jooq-test`                                                            | jOOQ 切片(本项目用全 `@SpringBootTest`,见 4.4) |
+| `@JsonTest`                    | `starter-test` 传递                                                                  | DTO 序列化专项                              |
+| `RestTestClient`               | `org.springframework.test.web.servlet.client.RestTestClient`(Spring Framework 7 包) | 集成 HTTP 客户端                            |
+| `@AutoConfigureRestTestClient` | `spring-boot-resttestclient` 传递                                                    | 让 `@SpringBootTest` 认出 RestTestClient  |
 
 ### 7.3 集成层
 
-| 工具 | 版本 | 用途 |
-|---|---|---|
-| Testcontainers | 1.21.3 | Docker 容器托管 |
-| `testcontainers-postgresql` | 同上 | PG 容器 |
-| `com.redis:testcontainers-redis` | 2.2.4 | Redis 容器(Sa-Token session)|
-| `@ServiceConnection` | Spring Boot 3.1+ | Testcontainers ↔ Spring 自动装配 |
-| `spring-boot-testcontainers` | Boot 4 | `@ServiceConnection` 运行时 |
-| `org.testcontainers:junit-jupiter` | 1.21.3 | `@Testcontainers` 注解 |
+| 工具                                 | 版本               | 用途                           |
+|------------------------------------|------------------|------------------------------|
+| Testcontainers                     | 1.21.3           | Docker 容器托管                  |
+| `testcontainers-postgresql`        | 同上               | PG 容器                        |
+| `com.redis:testcontainers-redis`   | 2.2.4            | Redis 容器(Sa-Token session)   |
+| `@ServiceConnection`               | Spring Boot 3.1+ | Testcontainers ↔ Spring 自动装配 |
+| `spring-boot-testcontainers`       | Boot 4           | `@ServiceConnection` 运行时     |
+| `org.testcontainers:junit-jupiter` | 1.21.3           | `@Testcontainers` 注解         |
 
 ### 7.4 架构
 
-| 工具 | 版本 | 用途 |
-|---|---|---|
-| ArchUnit | 1.3.0 | Hexagonal 层依赖规则 |
+| 工具                   | 版本    | 用途                                    |
+|----------------------|-------|---------------------------------------|
+| ArchUnit             | 1.3.0 | Hexagonal 层依赖规则                       |
 | Spring Modulith Test | 2.0.5 | `ApplicationModules.of(...).verify()` |
 
 ### 7.5 质量度量(尚未接入,建议 Phase 4.1 引入)
 
-| 工具 | 版本 | 用途 |
-|---|---|---|
-| JaCoCo | 0.8.12 | 行 / 分支覆盖率 |
-| PIT(pitest)| 1.15+ | Mutation testing |
-| Spotless | 8.4+ | 代码格式(非测试但配套)|
+| 工具          | 版本     | 用途               |
+|-------------|--------|------------------|
+| JaCoCo      | 0.8.12 | 行 / 分支覆盖率        |
+| PIT(pitest) | 1.15+  | Mutation testing |
+| Spotless    | 8.4+   | 代码格式(非测试但配套)     |
 
 ### 7.6 未来(Phase 5+)
 
-| 工具 | 用途 | Phase |
-|---|---|---|
-| jqwik | Property-based testing | 4.1(低 ROI 但高质量)|
-| JMH | Micro-benchmark(Argon2id 参数)| 5 |
-| WireMock | Mock 外部 HTTP | 5 |
-| k6 / Gatling | HTTP 压测 | 5 |
-| Jazzer | Fuzz testing | 6+ |
-| Pact | Consumer-driven contract | 接入前端团队后 |
-| Chaos Monkey | 故障注入 | 7+ |
+| 工具           | 用途                           | Phase           |
+|--------------|------------------------------|-----------------|
+| jqwik        | Property-based testing       | 4.1(低 ROI 但高质量) |
+| JMH          | Micro-benchmark(Argon2id 参数) | 5               |
+| WireMock     | Mock 外部 HTTP                 | 5               |
+| k6 / Gatling | HTTP 压测                      | 5               |
+| Jazzer       | Fuzz testing                 | 6+              |
+| Pact         | Consumer-driven contract     | 接入前端团队后         |
+| Chaos Monkey | 故障注入                         | 7+              |
 
 ---
 
@@ -637,8 +647,8 @@ void post_rejects_oversize_password() throws Exception {
 ```java
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
-    public static final String POSTGRES_IMAGE = "postgres:18-alpine";
-    public static final String REDIS_IMAGE = "redis:8-alpine";
+    public static final String POSTGRES_IMAGE = "postgres:18.3-alpine";
+    public static final String REDIS_IMAGE = "redis:8.6.2-alpine";
 
     @Bean @ServiceConnection
     PostgreSQLContainer<?> postgresContainer() {
@@ -652,7 +662,8 @@ public class TestcontainersConfiguration {
 }
 ```
 
-每个 `@SpringBootTest` 类用 `@Import(TestcontainersConfiguration.class)` 引入。Spring context cache 会**按 @SpringBootTest 配置的 hash** 缓存 — 相同配置的多个 test class 共享同一个容器实例,不同配置各起各的。
+每个 `@SpringBootTest` 类用 `@Import(TestcontainersConfiguration.class)` 引入。Spring context cache 会**按
+@SpringBootTest 配置的 hash** 缓存 — 相同配置的多个 test class 共享同一个容器实例,不同配置各起各的。
 
 ### 10.2 如何组织 integration test 场景
 
@@ -686,9 +697,11 @@ class KilnIntegrationTest {
 
 ### 10.3 数据清理策略
 
-**不清理** — Testcontainers 的 PG 容器在测试类结束后自动销毁。每个 `@SpringBootTest` 类得到 fresh PG,Flyway 重跑所有 migration。
+**不清理** — Testcontainers 的 PG 容器在测试类结束后自动销毁。每个 `@SpringBootTest` 类得到 fresh PG,Flyway 重跑所有
+migration。
 
 **不要**:
+
 - `@DirtiesContext` — 慢,每个测试重启上下文
 - `@Transactional + @Rollback` — 对 `@SpringBootTest(RANDOM_PORT)` 的 HTTP 调用不生效(tx 在请求线程,回滚后才是断言检查)
 - 手工 DELETE — 繁琐,容易漏表
@@ -762,7 +775,8 @@ class ModularityTest {
 }
 ```
 
-`verify()` 需要业务模块稳定后再开启(现在用 `listModules()` 作为 Phase 3-4 占位 — 见 `app/src/test/.../ModularityTest.java`)。
+`verify()` 需要业务模块稳定后再开启(现在用 `listModules()` 作为 Phase 3-4 占位 — 见
+`app/src/test/.../ModularityTest.java`)。
 
 ---
 
@@ -787,10 +801,11 @@ class OpenApiSnapshotTest {
 ```
 
 **工作流**:
+
 - 故意改变 API(如加字段) → test fail
 - 开发者判断:是破坏性变更吗?
-  - 是 → 需要版本化 API、通知客户端
-  - 不是 → `./gradlew :app:updateOpenApiSnapshot` 刷新快照 + 改动和刷新在同一个 commit
+    - 是 → 需要版本化 API、通知客户端
+    - 不是 → `./gradlew :app:updateOpenApiSnapshot` 刷新快照 + 改动和刷新在同一个 commit
 
 ### 12.2 Consumer-driven contracts(Pact,未来)
 
@@ -878,6 +893,7 @@ pitest {
 ```
 
 运行:
+
 ```bash
 ./gradlew :user:pitest
 open user/build/reports/pitest/index.html
@@ -898,14 +914,14 @@ open user/build/reports/pitest/index.html
 
 每条安全承诺都应该有对应的测试:
 
-| 承诺 | 测试 |
-|---|---|
-| 密码明文永不持久化 | `UserMapperTest` + `UserJooqRepositoryAdapterTest` 验证只读写 `password_hash` |
-| 密码明文永不记入日志 | log mock + 敏感字段断言(Phase 4.1 可补)|
-| 登录响应不能枚举邮箱 | `AuthenticateUserServiceTest.happy_path_does_not_leak_whether_email_or_password_was_wrong` |
-| 登录响应时间不能枚举邮箱 | integration benchmark: unknown-email 和 wrong-password 耗时差 < 10ms |
-| X-Request-Id 过滤注入 | `MdcFilterTest.headerWithCrLfIsReplacedWithUuid` |
-| @SaCheckLogin 真的拦截未登录 | `KilnIntegrationTest.getWithoutTokenReturns401Unauthorized` |
+| 承诺                    | 测试                                                                                         |
+|-----------------------|--------------------------------------------------------------------------------------------|
+| 密码明文永不持久化             | `UserMapperTest` + `UserJooqRepositoryAdapterTest` 验证只读写 `password_hash`                   |
+| 密码明文永不记入日志            | log mock + 敏感字段断言(Phase 4.1 可补)                                                            |
+| 登录响应不能枚举邮箱            | `AuthenticateUserServiceTest.happy_path_does_not_leak_whether_email_or_password_was_wrong` |
+| 登录响应时间不能枚举邮箱          | integration benchmark: unknown-email 和 wrong-password 耗时差 < 10ms                           |
+| X-Request-Id 过滤注入     | `MdcFilterTest.headerWithCrLfIsReplacedWithUuid`                                           |
+| @SaCheckLogin 真的拦截未登录 | `KilnIntegrationTest.getWithoutTokenReturns401Unauthorized`                                |
 
 ### 14.2 JMH Micro-benchmark(Phase 5+)
 
@@ -960,21 +976,21 @@ export default function () {
 
 **不要做**(每条都有教训):
 
-| 反模式 | 为什么错 |
-|---|---|
-| **`@Disabled` + TODO**  | 永远不会被激活。删掉或修。CLAUDE.md 规则:不允许进 main。 |
-| **`assertNotNull(x)` 作为唯一断言** | 几乎什么都能通过。PIT 会用这条定位你的垃圾测试。 |
-| **Mock domain 对象** | record 是值对象,mock 它们等于 "我想让 2+2 = 5"。测试无意义。 |
-| **测试名为 `test1` / `testFoo`** | 读 test 文件时必须猜它测什么。用业务语义命名(`shouldRejectBlankEmail`)。 |
-| **Integration test 测 domain 逻辑** | 慢 10-100 倍,失败时难 pinpoint。下沉到 unit。 |
-| **`@SpringBootTest` 测 DTO 序列化** | 小题大做。用 `@JsonTest` 或纯 unit 测 record。 |
-| **共享可变 static 状态** | Phase 2.1 review 抓到过(`static final GetUserUseCase mockUseCase`)。用 `@MockitoBean` 自动 reset。 |
-| **跨测试按创建顺序依赖** | JUnit 执行顺序不保证。每个 @Test 独立 setup。 |
-| **Skeleton 也写测试** | `package-info.java`、`@SpringBootApplication` 入口类没行为,写测试是浪费。 |
-| **测框架不是测业务** | `assertThat(new User(...).name()).isEqualTo("x")` — record 的 accessor 不需要测。 |
-| **"测试写完不再看"** | 测试代码也要 code review。语义过期的测试是技术债。 |
-| **覆盖率至上** | 100% 覆盖率 + 0 断言 = 0 价值。结合 PIT 看质量,不只看数量。 |
-| **测试绕开锁 / 事务的特殊时序** | 这类"只在生产复现"的 bug 要用 property-based 或专门的并发测试,不能用普通 unit 糊弄。 |
+| 反模式                              | 为什么错                                                                                       |
+|----------------------------------|--------------------------------------------------------------------------------------------|
+| **`@Disabled` + TODO**           | 永远不会被激活。删掉或修。CLAUDE.md 规则:不允许进 main。                                                       |
+| **`assertNotNull(x)` 作为唯一断言**    | 几乎什么都能通过。PIT 会用这条定位你的垃圾测试。                                                                 |
+| **Mock domain 对象**               | record 是值对象,mock 它们等于 "我想让 2+2 = 5"。测试无意义。                                                 |
+| **测试名为 `test1` / `testFoo`**     | 读 test 文件时必须猜它测什么。用业务语义命名(`shouldRejectBlankEmail`)。                                       |
+| **Integration test 测 domain 逻辑** | 慢 10-100 倍,失败时难 pinpoint。下沉到 unit。                                                         |
+| **`@SpringBootTest` 测 DTO 序列化**  | 小题大做。用 `@JsonTest` 或纯 unit 测 record。                                                       |
+| **共享可变 static 状态**               | Phase 2.1 review 抓到过(`static final GetUserUseCase mockUseCase`)。用 `@MockitoBean` 自动 reset。 |
+| **跨测试按创建顺序依赖**                   | JUnit 执行顺序不保证。每个 @Test 独立 setup。                                                           |
+| **Skeleton 也写测试**                | `package-info.java`、`@SpringBootApplication` 入口类没行为,写测试是浪费。                                |
+| **测框架不是测业务**                     | `assertThat(new User(...).name()).isEqualTo("x")` — record 的 accessor 不需要测。                |
+| **"测试写完不再看"**                    | 测试代码也要 code review。语义过期的测试是技术债。                                                            |
+| **覆盖率至上**                        | 100% 覆盖率 + 0 断言 = 0 价值。结合 PIT 看质量,不只看数量。                                                   |
+| **测试绕开锁 / 事务的特殊时序**              | 这类"只在生产复现"的 bug 要用 property-based 或专门的并发测试,不能用普通 unit 糊弄。                                  |
 
 ---
 
@@ -1061,7 +1077,8 @@ Boot 4 把 `@WebMvcTest` 从 `spring-boot-autoconfigure` 拆到独立模块。
 
 ### 17.4 "`@MockBean` 用不了?"
 
-Spring Test 6.2+ 用 `@MockitoBean`(`org.springframework.test.context.bean.override.mockito.MockitoBean`)。自动 reset,无共享 static 问题。
+Spring Test 6.2+ 用 `@MockitoBean`(`org.springframework.test.context.bean.override.mockito.MockitoBean`)。自动 reset,无共享
+static 问题。
 
 ### 17.5 "`@SaCheckLogin` 在 slice 测试里不拦截?"
 
@@ -1069,18 +1086,21 @@ Spring Test 6.2+ 用 `@MockitoBean`(`org.springframework.test.context.bean.overr
 
 ### 17.6 "Ryuk 容器启不来?"
 
-Colima 下常见。禁用 Ryuk:`TESTCONTAINERS_RYUK_DISABLED=true`(或 `~/.testcontainers.properties` 加 `ryuk.disabled=true`)。代价:孤儿容器不自动清理,定期手动 `docker rm -f $(docker ps -a -q --filter "name=testcontainers")`。
+Colima 下常见。禁用 Ryuk:`TESTCONTAINERS_RYUK_DISABLED=true`(或 `~/.testcontainers.properties` 加 `ryuk.disabled=true`)
+。代价:孤儿容器不自动清理,定期手动 `docker rm -f $(docker ps -a -q --filter "name=testcontainers")`。
 
 ### 17.7 "Redisson 导致 ClassNotFoundException?"
 
 Redisson 3.52.0 硬引用 Boot 3 的 `RedisAutoConfiguration`(Boot 4 重命名为 `DataRedisAutoConfiguration`)。两条路:
 
 - Phase 5 再用 → 现在从 build.gradle 移掉
-- 必须现在用 → `spring.autoconfigure.exclude: org.redisson.spring.starter.RedissonAutoConfigurationV2` + 手动 `@Configuration` wire `RedissonClient`
+- 必须现在用 → `spring.autoconfigure.exclude: org.redisson.spring.starter.RedissonAutoConfigurationV2` + 手动
+  `@Configuration` wire `RedissonClient`
 
 ### 17.8 "`NoSuchBeanDefinitionException: ObjectMapper`"
 
-Spring Boot 4 / Jackson 3 不提供 `com.fasterxml.jackson.databind.ObjectMapper` bean(提供的是 `tools.jackson.databind.JsonMapper`)。测试里**不要** `@Autowired ObjectMapper`。用 text block 手写 JSON 字符串。
+Spring Boot 4 / Jackson 3 不提供 `com.fasterxml.jackson.databind.ObjectMapper` bean(提供的是
+`tools.jackson.databind.JsonMapper`)。测试里**不要** `@Autowired ObjectMapper`。用 text block 手写 JSON 字符串。
 
 ### 17.9 "测试应该跑多快?"
 
@@ -1106,13 +1126,13 @@ user/src/test/java/com/skyflux/kiln/user/domain/model/UserTest.java
 
 ## 附录:测试套件现状速查
 
-| 模块 | Tests(Phase 4 末)| 主要类型 |
-|---|---|---|
-| `common` | 42 | Unit(R, PageQuery, Money, AppException)|
-| `infra` | 85 | Unit(Argon2id, MdcFilter)+ Slice(CORS, OpenAPI, Jackson)+ GlobalExceptionHandler 22 条 |
-| `user` | 61 | Unit domain(User 11)+ Unit application(Register 10, Auth 6, GetUser 3)+ Slice(UserController 5, AuthController 6)+ Integration(UserJooqRepositoryAdapter 11)+ Mapper(7)+ Architecture(3) |
-| `app` | 12 | Smoke(contextLoads)+ Modulith + E2E integration(Phase 2-4 cases)|
-| **合计** | **200** | — |
+| 模块       | Tests(Phase 4 末) | 主要类型                                                                                                                                                                                     |
+|----------|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `common` | 42               | Unit(R, PageQuery, Money, AppException)                                                                                                                                                  |
+| `infra`  | 85               | Unit(Argon2id, MdcFilter)+ Slice(CORS, OpenAPI, Jackson)+ GlobalExceptionHandler 22 条                                                                                                    |
+| `user`   | 61               | Unit domain(User 11)+ Unit application(Register 10, Auth 6, GetUser 3)+ Slice(UserController 5, AuthController 6)+ Integration(UserJooqRepositoryAdapter 11)+ Mapper(7)+ Architecture(3) |
+| `app`    | 12               | Smoke(contextLoads)+ Modulith + E2E integration(Phase 2-4 cases)                                                                                                                         |
+| **合计**   | **200**          | —                                                                                                                                                                                        |
 
 未接入:JaCoCo、PIT、jqwik、JMH、WireMock、k6。
 
@@ -1120,8 +1140,8 @@ user/src/test/java/com/skyflux/kiln/user/domain/model/UserTest.java
 
 ## 版本
 
-| 项 | 值 |
-|---|---|
-| 创建 | 2026-04-17 |
-| 对应项目版本 | Phase 4 完成后(commit `ad5fa5f`)|
-| 维护频率 | 每个测试基建 Phase 结束时更新;小改动实时跟进 FAQ |
+| 项      | 值                              |
+|--------|--------------------------------|
+| 创建     | 2026-04-17                     |
+| 对应项目版本 | Phase 4 完成后(commit `ad5fa5f`)  |
+| 维护频率   | 每个测试基建 Phase 结束时更新;小改动实时跟进 FAQ |
