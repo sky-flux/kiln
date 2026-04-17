@@ -1,0 +1,15 @@
+dependencies {
+    api project(':common')
+
+    api 'org.springframework.boot:spring-boot-starter'
+    api 'org.springframework.boot:spring-boot-starter-web'
+    api 'org.springframework.boot:spring-boot-starter-validation'
+    api 'org.springframework.modulith:spring-modulith-starter-core'
+
+    // OpenAPI / Swagger UI (Ch.15)
+    api 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+
+    // Phase 3+: jOOQ, Flyway, Postgres
+    // Phase 4+: Redis, Redisson, Spring Security, Sa-Token
+    // Phase 6+: JobRunr, Flowable, BouncyCastle
+}

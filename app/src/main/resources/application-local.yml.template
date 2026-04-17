@@ -1,0 +1,8 @@
+# Copy to application-local.yml and fill in local credentials.
+# application-local.yml is gitignored.
+#
+# spring:
+#   datasource:
+#     url: jdbc:postgresql://localhost:5432/kiln
+#     username: postgres
+#     password: postgres

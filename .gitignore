@@ -1,56 +1,29 @@
-HELP.md
-.gradle
+# Gradle
+.gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-### IntelliJ IDEA ###
-.idea
-*.iws
+# IDE
+.idea/
 *.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
+*.iws
 .vscode/
+out/
 
-### OS ###
-.DS_Store
-Thumbs.db
+# jOOQ generated
+infra/build/generated-src/jooq/
 
-### Logs ###
+# Logs
 *.log
 logs/
 
-### Local config & secrets ###
-.env
-.env.*
-!.env.example
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config
 application-local.yml
-application-local.yaml
 application-local.properties
 
-### Spring Boot runtime ###
-*.pid
+# Docker
+/data/
