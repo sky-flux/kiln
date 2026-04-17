@@ -190,6 +190,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void illegalArgumentDoesNotEchoMessageToClient() {
+        // I2: the exception message often contains user input; never echo it.
+        ResponseEntity<R<Void>> resp = handler.handleIllegalArgument(
+                new IllegalArgumentException("password 'hunter2' too weak"));
+        assertThat(resp.getBody().message())
+                .isEqualTo(AppCode.BAD_REQUEST.message())
+                .doesNotContain("hunter2");
+    }
+
+    @Test
     void httpMessageNotReadableReturns400() {
         HttpMessageNotReadableException ex = new HttpMessageNotReadableException(
                 "malformed", new RuntimeException("root cause"),
@@ -209,6 +219,41 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<R<Void>> resp = handler.handleNoResource(new NoResourceFoundException(org.springframework.http.HttpMethod.GET, "/missing", "Not Found"));
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(resp.getBody().code()).isEqualTo(AppCode.NOT_FOUND.code());
+    }
+
+    // ──────────── Sa-Token (Phase 4) ────────────
+
+    @Test
+    void notLoginExceptionReturns401WithUnauthorizedCode() {
+        cn.dev33.satoken.exception.NotLoginException ex =
+                new cn.dev33.satoken.exception.NotLoginException(
+                        cn.dev33.satoken.exception.NotLoginException.NOT_TOKEN,
+                        "login", null);
+        ResponseEntity<R<Void>> resp = handler.handleNotLogin(ex);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().code()).isEqualTo(AppCode.UNAUTHORIZED.code());
+        assertThat(resp.getBody().message()).isEqualTo(AppCode.UNAUTHORIZED.message());
+    }
+
+    @Test
+    void notPermissionExceptionReturns403WithForbiddenCode() {
+        cn.dev33.satoken.exception.NotPermissionException ex =
+                new cn.dev33.satoken.exception.NotPermissionException("perm:read", "login");
+        ResponseEntity<R<Void>> resp = handler.handleForbidden(ex);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().code()).isEqualTo(AppCode.FORBIDDEN.code());
+        assertThat(resp.getBody().message()).isEqualTo(AppCode.FORBIDDEN.message());
+    }
+
+    @Test
+    void notRoleExceptionReturns403WithForbiddenCode() {
+        cn.dev33.satoken.exception.NotRoleException ex =
+                new cn.dev33.satoken.exception.NotRoleException("admin", "login");
+        ResponseEntity<R<Void>> resp = handler.handleForbidden(ex);
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getBody().code()).isEqualTo(AppCode.FORBIDDEN.code());
     }
 
     // ──────────── Catch-all (L3: no hard-coded message) ────────────

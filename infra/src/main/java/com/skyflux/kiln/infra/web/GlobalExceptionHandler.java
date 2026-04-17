@@ -22,6 +22,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotPermissionException;
+import cn.dev33.satoken.exception.NotRoleException;
+
 /**
  * Global exception handler that translates framework and application
  * exceptions into {@link R}-wrapped {@link ResponseEntity} payloads.
@@ -94,11 +98,19 @@ public class GlobalExceptionHandler {
         return fail(AppCode.BAD_REQUEST, message);
     }
 
+    /**
+     * I2: log the exception message for diagnostics, but return the GENERIC
+     * {@link AppCode#BAD_REQUEST} message to the client. Echoing
+     * {@code ex.getMessage()} into the response body is a footgun — any
+     * future code path that constructs an IAE from user input (e.g.,
+     * {@code "password '" + pw + "' too weak"}) would leak that input back
+     * to the caller. For client-visible error text, prefer throwing
+     * {@code AppException(AppCode)} with a fixed message.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<R<Void>> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("IllegalArgument: {}", ex.getMessage());
-        return fail(AppCode.BAD_REQUEST,
-                ex.getMessage() != null ? ex.getMessage() : AppCode.BAD_REQUEST.message());
+        return fail(AppCode.BAD_REQUEST);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -118,6 +130,39 @@ public class GlobalExceptionHandler {
     public ResponseEntity<R<Void>> handleNoResource(NoResourceFoundException ex) {
         log.warn("No resource: {}", ex.getResourcePath());
         return fail(AppCode.NOT_FOUND);
+    }
+
+    // ──────────── Sa-Token (Phase 4 — auth / authz) ────────────
+
+    /**
+     * Sa-Token's {@code NotLoginException} covers every failure of the login
+     * gate: missing token, invalid token, expired token, kick-out, etc. All
+     * surface as HTTP 401 with a single {@code UNAUTHORIZED} code so clients
+     * only need one branch. The specific sub-type code is logged for
+     * diagnostics.
+     *
+     * <p>I6: log only {@code ex.getType()} (category code like
+     * {@code "token-timeout"}, {@code "invalid-token"}). Sa-Token's
+     * {@code ex.getMessage()} often embeds the raw token value — logging it
+     * at WARN level would put session tokens into aggregated log pipelines.
+     */
+    @ExceptionHandler(NotLoginException.class)
+    public ResponseEntity<R<Void>> handleNotLogin(NotLoginException ex) {
+        log.warn("NotLogin type={}", ex.getType());
+        return fail(AppCode.UNAUTHORIZED);
+    }
+
+    /**
+     * Authenticated but not allowed — HTTP 403. Covers both
+     * {@code NotPermissionException} (fine-grained perm check via
+     * {@code @SaCheckPermission}) and {@code NotRoleException}
+     * ({@code @SaCheckRole}). Same log-hygiene rule as above: capture the
+     * exception type, not the message (which may echo user input or tokens).
+     */
+    @ExceptionHandler({NotPermissionException.class, NotRoleException.class})
+    public ResponseEntity<R<Void>> handleForbidden(RuntimeException ex) {
+        log.warn("Forbidden type={}", ex.getClass().getSimpleName());
+        return fail(AppCode.FORBIDDEN);
     }
 
     // ──────────── Catch-all (L3: use AppCode message, not hand-rolled string) ────────────

@@ -1,2 +1,2 @@
-/** Spring Security + Sa-Token filter chain configuration. Phase 1: placeholder; implementation deferred. */
+/** Concrete security infrastructure — Argon2id, Sa-Token config. */
 package com.skyflux.kiln.infra.security;
