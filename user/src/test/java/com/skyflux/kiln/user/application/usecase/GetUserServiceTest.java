@@ -29,7 +29,7 @@ class GetUserServiceTest {
     @Test
     void returns_user_when_repository_finds_it() {
         UserId id = UserId.newId();
-        User stored = User.reconstitute(id, "Alice", "alice@example.com");
+        User stored = User.reconstitute(id, "Alice", "alice@example.com", "fake-hash");
         when(repo.findById(id)).thenReturn(Optional.of(stored));
 
         User result = service.execute(id);

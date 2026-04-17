@@ -25,7 +25,8 @@ class UserMapper {
         return User.reconstitute(
                 new UserId(record.getId()),
                 record.getName(),
-                record.getEmail());
+                record.getEmail(),
+                record.getPasswordHash());
     }
 
     /**
@@ -42,6 +43,7 @@ class UserMapper {
         record.setId(user.id().value());
         record.setName(user.name());
         record.setEmail(user.email());
+        record.setPasswordHash(user.passwordHash());
         record.setCreatedAt(now);
         record.setUpdatedAt(now);
         return record;

@@ -1,5 +1,6 @@
 package com.skyflux.kiln.user.adapter.in.web;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.skyflux.kiln.user.application.port.in.GetUserUseCase;
 import com.skyflux.kiln.user.application.port.in.RegisterUserUseCase;
 import com.skyflux.kiln.user.domain.model.User;
@@ -27,6 +28,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @SaCheckLogin
     public UserResponse get(@PathVariable String id) {
         User user = getUser.execute(UserId.of(id));
         return UserResponse.from(user);
@@ -35,7 +37,8 @@ public class UserController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserIdResponse register(@Valid @RequestBody RegisterUserRequest req) {
-        UserId id = registerUser.execute(new RegisterUserUseCase.Command(req.name(), req.email()));
+        UserId id = registerUser.execute(
+                new RegisterUserUseCase.Command(req.name(), req.email(), req.password()));
         return new UserIdResponse(id.value().toString());
     }
 }

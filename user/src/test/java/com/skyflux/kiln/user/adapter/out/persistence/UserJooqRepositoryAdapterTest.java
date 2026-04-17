@@ -28,6 +28,8 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 @SpringBootTest(classes = UserJooqRepositoryAdapterTest.TestApp.class)
 class UserJooqRepositoryAdapterTest {
 
+    private static final String HASH = "$argon2id$v=19$test";
+
     /** PostgreSQL image used by all Phase 3 integration tests — single source of truth. */
     static final String POSTGRES_IMAGE = "postgres:18-alpine";
 
@@ -37,8 +39,25 @@ class UserJooqRepositoryAdapterTest {
      * {@code KilnApplication} lives in {@code app}, which is not on the user
      * test classpath). {@code @SpringBootApplication} covers the Testcontainers
      * bean plus full component-scan over {@code com.skyflux.kiln.user}.
+     *
+     * <p>Phase 4 note: the jOOQ adapter test intentionally runs without Redis.
+     * Two classes are excluded from context loading:
+     * <ol>
+     *   <li>{@code DataRedisAutoConfiguration} — no Redis container here, so
+     *       the connection factory bean shouldn't be built.</li>
+     *   <li>{@code SaTokenDaoForRedisTemplate} — Sa-Token registers this as a
+     *       component that requires {@code RedisConnectionFactory} (which we
+     *       just excluded). Exclude it here to keep the slice Redis-free;
+     *       Sa-Token's in-memory DAO takes over, which is fine for adapter
+     *       persistence tests that don't exercise Sa-Token sessions.</li>
+     * </ol>
+     * Real Redis / Sa-Token wiring is exercised by the full-stack
+     * {@code KilnIntegrationTest} in {@code app/}.
      */
-    @SpringBootApplication
+    @SpringBootApplication(exclude = {
+            org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration.class,
+            cn.dev33.satoken.dao.SaTokenDaoForRedisTemplate.class
+    })
     static class TestApp {
         @Bean
         @ServiceConnection
@@ -64,7 +83,7 @@ class UserJooqRepositoryAdapterTest {
 
     @Test
     void saveThenFindByIdRoundTrips() {
-        User u = User.register("Bob", "bob@example.com");
+        User u = User.register("Bob", "bob@example.com", HASH);
         repo.save(u);
 
         Optional<User> found = repo.findById(u.id());
@@ -72,6 +91,7 @@ class UserJooqRepositoryAdapterTest {
         assertThat(found.get().id()).isEqualTo(u.id());
         assertThat(found.get().name()).isEqualTo("Bob");
         assertThat(found.get().email()).isEqualTo("bob@example.com");
+        assertThat(found.get().passwordHash()).isEqualTo(HASH);
     }
 
     @Test
@@ -81,10 +101,10 @@ class UserJooqRepositoryAdapterTest {
 
     @Test
     void saveIsUpsert_secondSaveWithSameIdUpdates() {
-        User first = User.register("Bob", "bob-upsert@example.com");
+        User first = User.register("Bob", "bob-upsert@example.com", HASH);
         repo.save(first);
 
-        User updated = User.reconstitute(first.id(), "Robert", "bob-upsert@example.com");
+        User updated = User.reconstitute(first.id(), "Robert", "bob-upsert@example.com", HASH);
         repo.save(updated);
 
         assertThat(repo.findById(first.id()).orElseThrow().name()).isEqualTo("Robert");
@@ -109,7 +129,7 @@ class UserJooqRepositoryAdapterTest {
         // C1: UPSERT DO UPDATE must NOT overwrite created_at on subsequent saves.
         // If a future refactor adds `.set(CREATED_AT, ...)` to the doUpdate chain,
         // this test catches it.
-        User first = User.register("CreateTime", "createtime@example.com");
+        User first = User.register("CreateTime", "createtime@example.com", HASH);
         repo.save(first);
         var firstRowCreatedAt = dsl.select(Tables.USERS.CREATED_AT)
                 .from(Tables.USERS)
@@ -119,7 +139,7 @@ class UserJooqRepositoryAdapterTest {
         // Small delay so a re-set of created_at would produce a different value
         try { Thread.sleep(10); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        User updated = User.reconstitute(first.id(), "CreateTime2", "createtime@example.com");
+        User updated = User.reconstitute(first.id(), "CreateTime2", "createtime@example.com", HASH);
         repo.save(updated);
 
         var secondRowCreatedAt = dsl.select(Tables.USERS.CREATED_AT)
@@ -134,13 +154,39 @@ class UserJooqRepositoryAdapterTest {
     void duplicateEmailTriggersDuplicateKeyException() {
         // I1: UNIQUE(email) at DB → Spring wraps as DuplicateKeyException.
         // RegisterUserService then translates to AppException(CONFLICT).
-        User a = User.register("A", "dup@example.com");
-        User b = User.register("B", "dup@example.com");   // same email, different id
+        User a = User.register("A", "dup@example.com", HASH);
+        User b = User.register("B", "dup@example.com", HASH);   // same email, different id
 
         repo.save(a);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> repo.save(b))
                 .isInstanceOf(DuplicateKeyException.class);
+    }
+
+    // ──────────── Phase 4: findByEmail ────────────
+
+    @Test
+    void findByEmailRoundTrips() {
+        User u = User.register("Carol", "carol@example.com", HASH);
+        repo.save(u);
+
+        Optional<User> found = repo.findByEmail("carol@example.com");
+        assertThat(found).isPresent();
+        assertThat(found.get().id()).isEqualTo(u.id());
+        assertThat(found.get().name()).isEqualTo("Carol");
+        assertThat(found.get().email()).isEqualTo("carol@example.com");
+        assertThat(found.get().passwordHash()).isEqualTo(HASH);
+    }
+
+    @Test
+    void findByEmailMissReturnsEmpty() {
+        assertThat(repo.findByEmail("not-registered@example.com")).isEmpty();
+    }
+
+    @Test
+    void findByEmailNullRejected() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> repo.findByEmail(null));
     }
 
     @org.springframework.beans.factory.annotation.Autowired

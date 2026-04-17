@@ -1,8 +1,8 @@
 package com.skyflux.kiln.user.adapter.in.web;
 
+import com.skyflux.kiln.user.application.port.in.AuthenticateUserUseCase;
 import com.skyflux.kiln.user.application.port.in.GetUserUseCase;
 import com.skyflux.kiln.user.application.port.in.RegisterUserUseCase;
-import com.skyflux.kiln.user.domain.model.User;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,11 +18,23 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Slice test for {@link UserController}.
+ *
+ * <p>Note: the GET {id} happy-path lives in {@code KilnIntegrationTest} instead
+ * of this slice — once {@code @SaCheckLogin} is on the GET handler, the
+ * Sa-Token auth interceptor is invoked, which requires the full Sa-Token
+ * session store (Redis) to be wired. The @WebMvcTest slice does not bring up
+ * Sa-Token's infrastructure, so an authenticated GET is not a reasonable
+ * slice-level assertion — the integration test is the right layer.
+ *
+ * <p>POST is still tested here because register does NOT require a logged-in
+ * session (it's the bootstrap path that creates a user in the first place).
+ */
 @WebMvcTest(UserController.class)
 class UserControllerTest {
 
@@ -44,22 +56,18 @@ class UserControllerTest {
     @MockitoBean
     RegisterUserUseCase registerUseCase;
 
+    /**
+     * {@code AuthController} lives in the same package and is auto-scanned by
+     * {@link BootConfig}. Even though this slice test exercises only
+     * {@code UserController}, the context still instantiates {@code AuthController},
+     * which requires an {@code AuthenticateUserUseCase} bean. Providing a mock
+     * keeps the slice focused without dragging the full auth stack in.
+     */
+    @MockitoBean
+    AuthenticateUserUseCase authenticateUseCase;
+
     @Autowired
     MockMvc mvc;
-
-    @Test
-    void get_by_id_returns_200_with_user_payload() throws Exception {
-        UUID uuid = UUID.randomUUID();
-        UserId id = new UserId(uuid);
-        User u = User.reconstitute(id, "Alice", "alice@example.com");
-        when(useCase.execute(any(UserId.class))).thenReturn(u);
-
-        mvc.perform(get("/api/v1/users/{id}", uuid.toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(uuid.toString()))
-                .andExpect(jsonPath("$.name").value("Alice"))
-                .andExpect(jsonPath("$.email").value("alice@example.com"));
-    }
 
     @Test
     void post_registers_user_and_returns_201_with_generated_id() throws Exception {
@@ -68,7 +76,7 @@ class UserControllerTest {
         when(registerUseCase.execute(any(RegisterUserUseCase.Command.class))).thenReturn(id);
 
         String body = """
-                {"name":"Alice","email":"alice@example.com"}
+                {"name":"Alice","email":"alice@example.com","password":"S3cret-pw"}
                 """;
 
         mvc.perform(post("/api/v1/users")
@@ -84,7 +92,7 @@ class UserControllerTest {
     @Test
     void post_with_blank_name_returns_400() throws Exception {
         String body = """
-                {"name":"","email":"alice@example.com"}
+                {"name":"","email":"alice@example.com","password":"S3cret-pw"}
                 """;
 
         mvc.perform(post("/api/v1/users")
@@ -96,7 +104,19 @@ class UserControllerTest {
     @Test
     void post_with_invalid_email_returns_400() throws Exception {
         String body = """
-                {"name":"Alice","email":"not-an-email"}
+                {"name":"Alice","email":"not-an-email","password":"S3cret-pw"}
+                """;
+
+        mvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void post_with_blank_password_returns_400() throws Exception {
+        String body = """
+                {"name":"Alice","email":"alice@example.com","password":""}
                 """;
 
         mvc.perform(post("/api/v1/users")

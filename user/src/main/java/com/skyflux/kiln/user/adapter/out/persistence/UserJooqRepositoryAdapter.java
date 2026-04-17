@@ -41,6 +41,15 @@ class UserJooqRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Optional<User> findByEmail(String email) {
+        Objects.requireNonNull(email, "email");
+        return dsl.selectFrom(Tables.USERS)
+                .where(Tables.USERS.EMAIL.eq(email))
+                .fetchOptional()
+                .map(mapper::toAggregate);
+    }
+
+    @Override
     public void save(User user) {
         Objects.requireNonNull(user, "user");
         UsersRecord r = mapper.toRecord(user);

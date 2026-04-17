@@ -9,5 +9,13 @@ import java.util.Optional;
 public interface UserRepository {
     Optional<User> findById(UserId id);
 
+    /**
+     * Look up a user by their (normalized, lowercase) email address.
+     *
+     * <p>Used by the login flow. Callers are responsible for normalizing the
+     * query key — the adapter does a byte-for-byte match against the DB.
+     */
+    Optional<User> findByEmail(String email);
+
     void save(User user);
 }

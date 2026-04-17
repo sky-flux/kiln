@@ -15,18 +15,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for {@link UserMapper}.
  *
  * <p>Pins the contracts that the adapter's UPSERT relies on:
- * - toRecord populates exactly id / name / email / created_at / updated_at
+ * - toRecord populates exactly id / name / email / password_hash / created_at / updated_at
  * - audit timestamps are UTC-offset (never local-zone)
  * - toAggregate trusts DB state (reconstitute, no normalization)
  */
 class UserMapperTest {
+
+    private static final String FAKE_HASH = "$argon2id$test$dummy";
 
     private final UserMapper mapper = new UserMapper();
 
     @Test
     void toRecordPopulatesAllExpectedFields() {
         UserId id = UserId.newId();
-        User u = User.reconstitute(id, "Alice", "alice@example.com");
+        User u = User.reconstitute(id, "Alice", "alice@example.com", FAKE_HASH);
 
         UsersRecord r = mapper.toRecord(u);
 
@@ -39,7 +41,7 @@ class UserMapperTest {
 
     @Test
     void auditTimestampsAreUtc() {
-        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com");
+        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", FAKE_HASH);
         OffsetDateTime before = OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(1);
 
         UsersRecord r = mapper.toRecord(u);
@@ -54,7 +56,7 @@ class UserMapperTest {
     void toRecordSetsCreatedAtAndUpdatedAtToSameInstant() {
         // On INSERT, created_at and updated_at should match.
         // (The UPSERT DO UPDATE clause in the adapter overwrites updated_at but leaves created_at.)
-        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com");
+        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", FAKE_HASH);
 
         UsersRecord r = mapper.toRecord(u);
 
@@ -68,6 +70,7 @@ class UserMapperTest {
         r.setId(uuid);
         r.setName("  Alice  ");            // pre-existing trailing spaces must NOT be trimmed on read
         r.setEmail("ALICE@Example.com");   // pre-existing case must NOT be lowered on read
+        r.setPasswordHash(FAKE_HASH);
         r.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         r.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
 
@@ -76,6 +79,7 @@ class UserMapperTest {
         assertThat(u.id().value()).isEqualTo(uuid);
         assertThat(u.name()).isEqualTo("  Alice  ");    // verbatim
         assertThat(u.email()).isEqualTo("ALICE@Example.com"); // verbatim
+        assertThat(u.passwordHash()).isEqualTo(FAKE_HASH);
     }
 
     @Test
@@ -93,5 +97,31 @@ class UserMapperTest {
         assertThat(methodsWithCreatedAtInName)
                 .as("UserMapper must not expose update-specific methods that bundle created_at")
                 .isZero();
+    }
+
+    // ──────────── Phase 4: passwordHash ────────────
+
+    @Test
+    void toRecordIncludesPasswordHash() {
+        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", "encoded-hash-42");
+
+        UsersRecord r = mapper.toRecord(u);
+
+        assertThat(r.getPasswordHash()).isEqualTo("encoded-hash-42");
+    }
+
+    @Test
+    void toAggregateReadsPasswordHash() {
+        UsersRecord r = new UsersRecord();
+        r.setId(UUID.randomUUID());
+        r.setName("Alice");
+        r.setEmail("alice@example.com");
+        r.setPasswordHash("encoded-from-db");
+        r.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+
+        User u = mapper.toAggregate(r);
+
+        assertThat(u.passwordHash()).isEqualTo("encoded-from-db");
     }
 }
