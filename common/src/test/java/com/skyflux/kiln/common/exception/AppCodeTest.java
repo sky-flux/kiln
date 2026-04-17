@@ -55,17 +55,32 @@ class AppCodeTest {
         // 2xxx auth → 401 semantics (not 500 as the old fallback)
         assertThat(AppCode.LOGIN_FAILED.httpStatus()).isEqualTo(401);
         assertThat(AppCode.TOKEN_EXPIRED.httpStatus()).isEqualTo(401);
+        assertThat(AppCode.ACCOUNT_LOCKED.httpStatus()).isEqualTo(423);
         // 3xxx business → treated as client-visible business failure, 400
         assertThat(AppCode.BUSINESS_ERROR.httpStatus()).isEqualTo(400);
+    }
+
+    @Test
+    void newAccountLockedCodeIs2003() {
+        assertThat(AppCode.ACCOUNT_LOCKED.code()).isEqualTo(2003);
+        assertThat(AppCode.ACCOUNT_LOCKED.httpStatus()).isEqualTo(423);
+        assertThat(AppCode.ACCOUNT_LOCKED.message()).isEqualTo("账户已临时锁定,请稍后重试");
+    }
+
+    @Test
+    void newRateLimitedCodeIs1009() {
+        assertThat(AppCode.RATE_LIMITED.code()).isEqualTo(1009);
+        assertThat(AppCode.RATE_LIMITED.httpStatus()).isEqualTo(429);
+        assertThat(AppCode.RATE_LIMITED.message()).isEqualTo("请求过于频繁,请稍后重试");
     }
 
     @Test
     void totalValuesCountMatchesSpec() {
         // 1xxx: BAD_REQUEST, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT,
         //       TOO_MANY_REQUESTS, VALIDATION_FAILED, METHOD_NOT_ALLOWED,
-        //       MEDIA_TYPE_NOT_SUPPORTED, INTERNAL_ERROR (10)
-        // 2xxx: LOGIN_FAILED, TOKEN_EXPIRED (2)
+        //       MEDIA_TYPE_NOT_SUPPORTED, RATE_LIMITED, INTERNAL_ERROR (11)
+        // 2xxx: LOGIN_FAILED, TOKEN_EXPIRED, ACCOUNT_LOCKED (3)
         // 3xxx: BUSINESS_ERROR (1)
-        assertThat(AppCode.values()).hasSize(13);
+        assertThat(AppCode.values()).hasSize(15);
     }
 }

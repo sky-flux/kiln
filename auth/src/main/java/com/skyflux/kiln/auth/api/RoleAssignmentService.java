@@ -19,4 +19,10 @@ public interface RoleAssignmentService {
      * a no-op (no duplicate row, no exception).
      */
     void assign(UUID userId, RoleCode role);
+
+    /**
+     * Revoke the given role from the user. Idempotent — removing a role the
+     * user doesn't hold is a no-op (no exception, no additional side effects).
+     */
+    void revoke(UUID userId, RoleCode role);
 }

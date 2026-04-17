@@ -7,6 +7,7 @@ dependencies {
     implementation project(':infra')
     implementation project(':user')
     implementation project(':auth')
+    implementation project(':audit')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

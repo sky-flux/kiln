@@ -82,6 +82,28 @@ sa-token:
   is-share: false
   is-log: false
 
+# Kiln security — authentication lockout policy (Phase 4.3 Wave 2). Consumed
+# by `User.registerLoginFailure()` via `SecurityProperties`. Values below
+# mirror the record's compact-constructor defaults — change in-place to tune.
+kiln:
+  security:
+    login:
+      lock-threshold: 5
+      lock-duration: PT15M
+      # Per-IP sliding-window throttle on POST /api/v1/auth/login (Phase 4.3 Wave 3).
+      # In-memory; process restart resets state. X-Forwarded-For parsing is
+      # deferred to Phase 5 — client IP is resolved from the TCP peer only.
+      rate-limit:
+        enabled: true
+        max-attempts: 10
+        window: PT1M
+
+springdoc:
+  api-docs:
+    path: /docs.json
+  swagger-ui:
+    path: /docs
+
 logging:
   level:
     root: INFO

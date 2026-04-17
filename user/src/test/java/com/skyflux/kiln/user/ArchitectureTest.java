@@ -91,6 +91,10 @@ class ArchitectureTest {
                     .and().areNotInterfaces()
                     .and().areNotRecords()
                     .and().doNotHaveSimpleName("package-info")
+                    // Phase 4.3 Gate 3 C2: exceptions declared inside a use-case
+                    // (e.g. marker subclass thrown by ONE method) live next to
+                    // their thrower; requiring a "Service" suffix would be cargo.
+                    .and().areNotAssignableTo(Throwable.class)
                     .should().haveSimpleNameEndingWith("Service");
 
     // ─────────────── Rule 7: domain must not import jOOQ-generated classes ──────────────────────

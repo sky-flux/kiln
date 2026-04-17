@@ -11,6 +11,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
+
+    // Phase 4.3 Wave 2: slice test for AdminRoleController.
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     // NOTE: `spring-modulith-events-api` was previously required for
     // `@ApplicationModuleListener`. Phase 4.2 Gate 3 C1: UserRegisteredListener
     // now uses plain Spring `@TransactionalEventListener` instead, so the api

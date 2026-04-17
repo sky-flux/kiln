@@ -81,6 +81,58 @@
         }
       }
     },
+    "/api/v1/admin/users/{userId}/roles/{roleCode}" : {
+      "post" : {
+        "tags" : [ "admin-role-controller" ],
+        "operationId" : "assignRole",
+        "parameters" : [ {
+          "name" : "userId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "roleCode",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "admin-role-controller" ],
+        "operationId" : "revokeRole",
+        "parameters" : [ {
+          "name" : "userId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "roleCode",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/users/{id}" : {
       "get" : {
         "tags" : [ "user-controller" ],
@@ -124,6 +176,70 @@
           }
         }
       }
+    },
+    "/api/v1/admin/audit-events" : {
+      "get" : {
+        "tags" : [ "audit-query-controller" ],
+        "operationId" : "list",
+        "parameters" : [ {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1,
+            "minimum" : 1
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 200,
+            "minimum" : 1
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "USER_REGISTERED", "LOGIN_SUCCESS", "LOGIN_FAILED", "ROLE_ASSIGNED", "ROLE_REVOKED", "ACCOUNT_LOCKED" ]
+          }
+        }, {
+          "name" : "actorUserId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "targetUserId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResultAuditEvent"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -144,7 +260,7 @@
           "password" : {
             "type" : "string",
             "maxLength" : 128,
-            "minLength" : 8
+            "minLength" : 0
           }
         }
       },
@@ -199,6 +315,60 @@
           "count" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "AuditEvent" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "occurredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "USER_REGISTERED", "LOGIN_SUCCESS", "LOGIN_FAILED", "ROLE_ASSIGNED", "ROLE_REVOKED", "ACCOUNT_LOCKED" ]
+          },
+          "actorUserId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "targetUserId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "details" : {
+            "type" : "string"
+          },
+          "requestId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PageResultAuditEvent" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AuditEvent"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       }

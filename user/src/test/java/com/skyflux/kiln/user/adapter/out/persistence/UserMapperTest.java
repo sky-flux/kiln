@@ -5,6 +5,7 @@ import com.skyflux.kiln.user.domain.model.User;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -28,7 +29,7 @@ class UserMapperTest {
     @Test
     void toRecordPopulatesAllExpectedFields() {
         UserId id = UserId.newId();
-        User u = User.reconstitute(id, "Alice", "alice@example.com", FAKE_HASH);
+        User u = User.reconstitute(id, "Alice", "alice@example.com", FAKE_HASH, 0, null);
 
         UsersRecord r = mapper.toRecord(u);
 
@@ -41,7 +42,7 @@ class UserMapperTest {
 
     @Test
     void auditTimestampsAreUtc() {
-        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", FAKE_HASH);
+        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", FAKE_HASH, 0, null);
         OffsetDateTime before = OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(1);
 
         UsersRecord r = mapper.toRecord(u);
@@ -56,7 +57,7 @@ class UserMapperTest {
     void toRecordSetsCreatedAtAndUpdatedAtToSameInstant() {
         // On INSERT, created_at and updated_at should match.
         // (The UPSERT DO UPDATE clause in the adapter overwrites updated_at but leaves created_at.)
-        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", FAKE_HASH);
+        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", FAKE_HASH, 0, null);
 
         UsersRecord r = mapper.toRecord(u);
 
@@ -73,6 +74,8 @@ class UserMapperTest {
         r.setPasswordHash(FAKE_HASH);
         r.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         r.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setFailedLoginAttempts(0);
+        r.setLockedUntil(null);
 
         User u = mapper.toAggregate(r);
 
@@ -103,7 +106,7 @@ class UserMapperTest {
 
     @Test
     void toRecordIncludesPasswordHash() {
-        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", "encoded-hash-42");
+        User u = User.reconstitute(UserId.newId(), "Alice", "alice@example.com", "encoded-hash-42", 0, null);
 
         UsersRecord r = mapper.toRecord(u);
 
@@ -119,9 +122,75 @@ class UserMapperTest {
         r.setPasswordHash("encoded-from-db");
         r.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         r.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setFailedLoginAttempts(0);
+        r.setLockedUntil(null);
 
         User u = mapper.toAggregate(r);
 
         assertThat(u.passwordHash()).isEqualTo("encoded-from-db");
+    }
+
+    // ──────────── Phase 4.3 Wave 1: lockout bookkeeping round-trip ────────────
+
+    @Test
+    void toRecordWritesLockoutFields() {
+        Instant lockedUntil = Instant.parse("2026-04-18T11:30:00Z");
+        User u = User.reconstitute(
+                UserId.newId(), "Alice", "alice@example.com", FAKE_HASH, 4, lockedUntil);
+
+        UsersRecord r = mapper.toRecord(u);
+
+        assertThat(r.getFailedLoginAttempts()).isEqualTo(4);
+        assertThat(r.getLockedUntil()).isNotNull();
+        // Mapper converts Instant → OffsetDateTime@UTC so the round-trip is
+        // stable regardless of host zone.
+        assertThat(r.getLockedUntil().toInstant()).isEqualTo(lockedUntil);
+    }
+
+    @Test
+    void toRecordWritesDefaultsWhenUserHasNoLockoutState() {
+        User u = User.register("Bob", "bob@example.com", FAKE_HASH);
+
+        UsersRecord r = mapper.toRecord(u);
+
+        assertThat(r.getFailedLoginAttempts()).isZero();
+        assertThat(r.getLockedUntil()).isNull();
+    }
+
+    @Test
+    void toAggregateReadsLockoutFieldsWhenLocked() {
+        Instant lockedUntil = Instant.parse("2026-04-18T12:00:00Z");
+        UsersRecord r = new UsersRecord();
+        r.setId(UUID.randomUUID());
+        r.setName("Alice");
+        r.setEmail("alice@example.com");
+        r.setPasswordHash(FAKE_HASH);
+        r.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setFailedLoginAttempts(4);
+        r.setLockedUntil(lockedUntil.atOffset(ZoneOffset.UTC));
+
+        User u = mapper.toAggregate(r);
+
+        assertThat(u.failedLoginAttempts()).isEqualTo(4);
+        assertThat(u.lockedUntil()).isEqualTo(lockedUntil);
+    }
+
+    @Test
+    void toAggregateReadsLockoutFieldsWhenUnlocked() {
+        UsersRecord r = new UsersRecord();
+        r.setId(UUID.randomUUID());
+        r.setName("Alice");
+        r.setEmail("alice@example.com");
+        r.setPasswordHash(FAKE_HASH);
+        r.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        r.setFailedLoginAttempts(0);
+        r.setLockedUntil(null);
+
+        User u = mapper.toAggregate(r);
+
+        assertThat(u.failedLoginAttempts()).isZero();
+        assertThat(u.lockedUntil()).isNull();
     }
 }

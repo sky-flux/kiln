@@ -1,0 +1,41 @@
+dependencies {
+    // Shared types (AppException, R, etc.) — consumed in Wave 2+.
+    implementation project(':common')
+    // Infra for jOOQ runtime + generated audit_events table, Spring Modulith core,
+    // web starter; Wave 2 will add a listener + repository here.
+    implementation project(':infra')
+    // Wave 3 C4: cross-module audit listeners consume the `events` named
+    // interfaces from `user` (UserRegistered, LoginEvent) and `auth`
+    // (RoleEvent). Spring Modulith enforces that only those packages are
+    // reachable; see audit/package-info.java allowedDependencies.
+    implementation project(':user')
+    implementation project(':auth')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.modulith:spring-modulith-starter-core'
+    // NOTE: Using plain Spring `@TransactionalEventListener` — same precedent as
+    // the auth module (Phase 4.2). Re-add `spring-modulith-events-api` +
+    // `-events-jdbc` if/when the module graduates to async + retry semantics.
+
+    // Spring Boot 4 moved `@WebMvcTest` out of `spring-boot-starter-test`.
+    // Needed for the AuditQueryController slice test. See CLAUDE.md traps.
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+}
+
+// JaCoCo coverage — audit is a Supporting subdomain with simple layout.
+// Threshold conservatively at 70% LINE until a behaviour baseline is measured
+// (Wave 2 lands the listener + repository that actually have branches).
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.70
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

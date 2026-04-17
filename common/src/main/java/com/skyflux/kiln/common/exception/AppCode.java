@@ -26,11 +26,13 @@ public enum AppCode {
     VALIDATION_FAILED(1006, 400, "参数校验失败"),
     METHOD_NOT_ALLOWED(1007, 405, "方法不被允许"),
     MEDIA_TYPE_NOT_SUPPORTED(1008, 415, "媒体类型不受支持"),
+    RATE_LIMITED(1009, 429, "请求过于频繁,请稍后重试"),
     INTERNAL_ERROR(1999, 500, "系统内部错误"),
 
     // 2xxx: authentication / session
     LOGIN_FAILED(2001, 401, "用户名或密码错误"),
     TOKEN_EXPIRED(2002, 401, "Token 已过期"),
+    ACCOUNT_LOCKED(2003, 423, "账户已临时锁定,请稍后重试"),
 
     // 3xxx: business rule violations (client-visible, not server fault)
     BUSINESS_ERROR(3000, 400, "业务处理失败");

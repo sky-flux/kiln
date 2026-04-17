@@ -37,6 +37,19 @@ public class UserRoleJooqRepository {
                 .execute();
     }
 
+    /**
+     * Remove a single {@code (user_id, role_id)} assignment. Idempotent — if
+     * no row matches, the DELETE affects 0 rows and returns normally.
+     */
+    public void revoke(UUID userId, UUID roleId) {
+        Objects.requireNonNull(userId, "userId");
+        Objects.requireNonNull(roleId, "roleId");
+        dsl.deleteFrom(Tables.USER_ROLES)
+                .where(Tables.USER_ROLES.USER_ID.eq(userId))
+                .and(Tables.USER_ROLES.ROLE_ID.eq(roleId))
+                .execute();
+    }
+
     public List<String> findRoleCodesByUserId(UUID userId) {
         Objects.requireNonNull(userId, "userId");
         return dsl.select(Tables.ROLES.CODE)

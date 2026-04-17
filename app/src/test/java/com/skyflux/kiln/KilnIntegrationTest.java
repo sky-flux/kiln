@@ -11,6 +11,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 import java.util.UUID;
@@ -45,6 +47,27 @@ class KilnIntegrationTest {
 
     @Autowired
     PermissionLookupService permissionLookup;
+
+    /**
+     * Phase 4.3 Wave 3 C5 — override security knobs so the e2e lockout test
+     * completes in 3 failed logins instead of the production default of 5,
+     * while keeping rate-limit headroom comfortably above the lockout
+     * threshold so unrelated tests (admin bootstrap, audit queries, etc.) do
+     * not accidentally trip the per-IP 429 sentinel.
+     *
+     * <p>Rate-limit e2e is intentionally NOT exercised here. The interceptor's
+     * sliding-window semantics are exhaustively covered by
+     * {@code LoginRateLimitInterceptorTest}; adding an e2e would require
+     * either a context rebuild (new Postgres + Redis containers) or a wall-
+     * clock wait for the window to expire, neither of which earns its keep.
+     */
+    @DynamicPropertySource
+    static void overrideSecurityForTests(DynamicPropertyRegistry r) {
+        r.add("kiln.security.login.lock-threshold", () -> "3");
+        r.add("kiln.security.login.lock-duration", () -> "PT1H");
+        r.add("kiln.security.login.rate-limit.max-attempts", () -> "50");
+        r.add("kiln.security.login.rate-limit.window", () -> "PT1M");
+    }
 
     // ──────────── Phase 2 / 3 — infra bypass & error mapping ────────────
 
@@ -90,7 +113,7 @@ class KilnIntegrationTest {
         client.post().uri("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
-                        {"name":"","email":"ok@example.com","password":"S3cret-pw"}
+                        {"name":"","email":"ok@example.com","password":"S3cret-pass"}
                         """)
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -103,7 +126,7 @@ class KilnIntegrationTest {
     void duplicateEmailReturns409Conflict() {
         // I1 e2e: second POST with same email (case-variant) triggers CONFLICT.
         String body1 = """
-                {"name":"Dup1","email":"dup-e2e@example.com","password":"pw-one-1"}
+                {"name":"Dup1","email":"dup-e2e@example.com","password":"pw-one-1111"}
                 """;
         client.post().uri("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -112,7 +135,7 @@ class KilnIntegrationTest {
                 .expectStatus().isCreated();
 
         String body2 = """
-                {"name":"Dup2","email":"DUP-e2e@Example.com","password":"pw-two-2"}
+                {"name":"Dup2","email":"DUP-e2e@Example.com","password":"pw-two-2222"}
                 """;
         client.post().uri("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -128,7 +151,7 @@ class KilnIntegrationTest {
     @Test
     void registerLoginThenAuthenticatedGetRoundTrips() {
         String email = "auth-e2e@example.com";
-        String password = "S3cret-pw";
+        String password = "S3cret-pass";
 
         // 1. Register
         String registerBody = """
@@ -216,7 +239,7 @@ class KilnIntegrationTest {
         // C2 Gate-3 fix: end-to-end logout coverage — after /logout, the same
         // bearer token must no longer grant access to protected endpoints.
         String email = "logout-e2e@example.com";
-        String password = "S3cret-pw";
+        String password = "S3cret-pass";
 
         // Register + login
         String registerResp = client.post().uri("/api/v1/users")
@@ -269,7 +292,7 @@ class KilnIntegrationTest {
         // positive-path tests. We assert the lookup SERVICE returns "USER" — which exercises
         // both the INSERT and the jOOQ read path used by StpInterfaceImpl.
         String email = "rbac-roles-visible@example.com";
-        String userId = register("RbacRolesVisible", email, "S3cret-pw");
+        String userId = register("RbacRolesVisible", email, "S3cret-pass");
 
         java.util.List<String> roles = permissionLookup.rolesFor(UUID.fromString(userId));
 
@@ -282,7 +305,7 @@ class KilnIntegrationTest {
         // registration. USER does NOT carry "ADMIN" → @SaCheckRole rejects with
         // NotRoleException → GlobalExceptionHandler maps to 403 / AppCode.FORBIDDEN.
         String email = "rbac-user-only@example.com";
-        String token = registerAndLogin("RbacUser", email, "S3cret-pw");
+        String token = registerAndLogin("RbacUser", email, "S3cret-pass");
 
         client.get().uri("/api/v1/admin/users/count")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -302,13 +325,13 @@ class KilnIntegrationTest {
         // UserRoleJooqRepository.assign → StpInterfaceImpl → @SaCheckRole("ADMIN")
         // pass → CountUsersUseCase → AdminController body → R-wrap.
         String email = "rbac-admin@example.com";
-        String userId = register("RbacAdmin", email, "S3cret-pw");
+        String userId = register("RbacAdmin", email, "S3cret-pass");
         roleAssignment.assign(UUID.fromString(userId), RoleCode.ADMIN);
-        String token = login(email, "S3cret-pw");
+        String token = login(email, "S3cret-pass");
 
         long baseline = readAdminCount(token);
-        register("RbacDelta1", "rbac-delta-1@example.com", "S3cret-pw");
-        register("RbacDelta2", "rbac-delta-2@example.com", "S3cret-pw");
+        register("RbacDelta1", "rbac-delta-1@example.com", "S3cret-pass");
+        register("RbacDelta2", "rbac-delta-2@example.com", "S3cret-pass");
 
         long after = readAdminCount(token);
         org.assertj.core.api.Assertions.assertThat(after - baseline).isEqualTo(2L);
@@ -338,6 +361,194 @@ class KilnIntegrationTest {
                 .expectStatus().isUnauthorized()
                 .expectBody()
                 .jsonPath("$.code").isEqualTo(1001);   // AppCode.UNAUTHORIZED
+    }
+
+    // ──────────── Phase 4.3 Wave 2 — strong-password registration ────────────
+
+    @Test
+    void registerRejectsWeakPassword() {
+        // @StrongPassword on RegisterUserRequest rejects < 10 chars / missing
+        // letter+non-letter mix. "abc" fails on length first; controller
+        // surfaces a Bean Validation error which GlobalExceptionHandler maps
+        // to VALIDATION_FAILED.
+        client.post().uri("/api/v1/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"name":"x","email":"weak-pw@example.com","password":"abc"}
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1006);   // AppCode.VALIDATION_FAILED
+    }
+
+    // ──────────── Phase 4.3 Wave 2 — account lockout ────────────
+
+    @Test
+    void accountLocksAfterThresholdFailedAttempts() {
+        // With lockThreshold=3 (see @DynamicPropertySource), the 3 wrong-
+        // password attempts each return 401/LOGIN_FAILED. The 4th attempt —
+        // even with the CORRECT password — finds the account locked and
+        // returns 423/ACCOUNT_LOCKED per AppCode.
+        String email = "lockout-e2e@example.com";
+        String password = "S3cret-pass";
+        register("LockoutE2E", email, password);
+
+        for (int i = 0; i < 3; i++) {
+            client.post().uri("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("""
+                            {"email":"%s","password":"WRONG-pass-%d"}
+                            """.formatted(email, i))
+                    .exchange()
+                    .expectStatus().isUnauthorized()
+                    .expectBody()
+                    .jsonPath("$.code").isEqualTo(2001);   // AppCode.LOGIN_FAILED
+        }
+
+        // 4th attempt — correct password, but the account is locked.
+        client.post().uri("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"email":"%s","password":"%s"}
+                        """.formatted(email, password))
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.LOCKED)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(2003);   // AppCode.ACCOUNT_LOCKED
+    }
+
+    // ──────────── Phase 4.3 Wave 2 — admin role assign / revoke ────────────
+
+    @Test
+    void adminCanAssignAdminRoleToUserViaHttp() {
+        // Bootstrap: register A + B, promote A to ADMIN via the service
+        // (Phase 4.2 pattern — no admin exists yet to self-promote). A then
+        // assigns ADMIN to B over HTTP; B subsequently passes @SaCheckRole.
+        String aEmail = "admin-assign-a@example.com";
+        String bEmail = "admin-assign-b@example.com";
+        String aId = register("AdminAssignA", aEmail, "S3cret-pass");
+        String bId = register("AdminAssignB", bEmail, "S3cret-pass");
+        roleAssignment.assign(UUID.fromString(aId), RoleCode.ADMIN);
+        String aToken = login(aEmail, "S3cret-pass");
+
+        client.post().uri("/api/v1/admin/users/{uid}/roles/{rc}", bId, "ADMIN")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aToken)
+                .exchange()
+                .expectStatus().isNoContent();
+
+        String bToken = login(bEmail, "S3cret-pass");
+        client.get().uri("/api/v1/admin/users/count")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + bToken)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    void adminCanRevokeRoleFromUserViaHttp() {
+        String aEmail = "admin-revoke-a@example.com";
+        String bEmail = "admin-revoke-b@example.com";
+        String aId = register("AdminRevokeA", aEmail, "S3cret-pass");
+        String bId = register("AdminRevokeB", bEmail, "S3cret-pass");
+        roleAssignment.assign(UUID.fromString(aId), RoleCode.ADMIN);
+        roleAssignment.assign(UUID.fromString(bId), RoleCode.ADMIN);
+        String aToken = login(aEmail, "S3cret-pass");
+        String bToken = login(bEmail, "S3cret-pass");
+
+        // Sanity: B starts as ADMIN.
+        client.get().uri("/api/v1/admin/users/count")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + bToken)
+                .exchange().expectStatus().isOk();
+
+        // A revokes B's ADMIN role.
+        client.delete().uri("/api/v1/admin/users/{uid}/roles/{rc}", bId, "ADMIN")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aToken)
+                .exchange()
+                .expectStatus().isNoContent();
+
+        // B can no longer reach the admin surface.
+        client.get().uri("/api/v1/admin/users/count")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + bToken)
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1002);   // AppCode.FORBIDDEN
+    }
+
+    @Test
+    void revokeIsIdempotent() {
+        String aEmail = "admin-idem-a@example.com";
+        String bEmail = "admin-idem-b@example.com";
+        String aId = register("AdminIdemA", aEmail, "S3cret-pass");
+        String bId = register("AdminIdemB", bEmail, "S3cret-pass");
+        roleAssignment.assign(UUID.fromString(aId), RoleCode.ADMIN);
+        String aToken = login(aEmail, "S3cret-pass");
+
+        // Even though B was never assigned ADMIN, both DELETEs succeed.
+        client.delete().uri("/api/v1/admin/users/{uid}/roles/{rc}", bId, "ADMIN")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aToken)
+                .exchange().expectStatus().isNoContent();
+        client.delete().uri("/api/v1/admin/users/{uid}/roles/{rc}", bId, "ADMIN")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aToken)
+                .exchange().expectStatus().isNoContent();
+    }
+
+    @Test
+    void assignUnknownRoleCodeReturns400() {
+        String aEmail = "admin-unknown-a@example.com";
+        String bEmail = "admin-unknown-b@example.com";
+        String aId = register("AdminUnknownA", aEmail, "S3cret-pass");
+        String bId = register("AdminUnknownB", bEmail, "S3cret-pass");
+        roleAssignment.assign(UUID.fromString(aId), RoleCode.ADMIN);
+        String aToken = login(aEmail, "S3cret-pass");
+
+        client.post().uri("/api/v1/admin/users/{uid}/roles/{rc}", bId, "GHOST")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aToken)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1006);   // AppCode.VALIDATION_FAILED
+    }
+
+    // ──────────── Phase 4.3 Wave 3 — audit events query ────────────
+
+    @Test
+    void adminCanQueryAuditEventsViaHttp() {
+        // Registration publishes USER_REGISTERED; successful login publishes
+        // LOGIN_SUCCESS. Cross-BC listeners in the audit module translate both
+        // into audit_events rows that the admin query endpoint exposes.
+        String adminEmail = "audit-admin@example.com";
+        String adminId = register("AuditAdmin", adminEmail, "S3cret-pass");
+        roleAssignment.assign(UUID.fromString(adminId), RoleCode.ADMIN);
+
+        String userEmail = "audit-user@example.com";
+        register("AuditUser", userEmail, "S3cret-pass");
+        login(userEmail, "S3cret-pass");   // publishes LOGIN_SUCCESS
+
+        String adminToken = login(adminEmail, "S3cret-pass");
+
+        String all = client.get().uri("/api/v1/admin/audit-events?page=1&size=20")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult().getResponseBody();
+        org.assertj.core.api.Assertions.assertThat(all)
+                .contains("\"code\":0")
+                .contains("\"items\"");
+
+        String filtered = client.get().uri("/api/v1/admin/audit-events?page=1&size=20&type=LOGIN_SUCCESS")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult().getResponseBody();
+        // Every item in the filtered page must carry type=LOGIN_SUCCESS and
+        // at least one must exist (the user-login + admin-login above).
+        org.assertj.core.api.Assertions.assertThat(filtered).contains("\"LOGIN_SUCCESS\"");
+        org.assertj.core.api.Assertions.assertThat(filtered)
+                .doesNotContain("\"USER_REGISTERED\"")
+                .doesNotContain("\"LOGIN_FAILED\"");
     }
 
     // ──────────── helpers ────────────

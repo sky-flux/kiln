@@ -97,6 +97,27 @@ class UserRoleJooqRepositoryTest {
         assertThat(repo.findRoleCodesByUserId(UUID.randomUUID())).isEmpty();
     }
 
+    @Test
+    void revokeRemovesAssignment() {
+        UUID userId = seedUser("revoke-removes@example.com");
+        repo.assign(userId, ADMIN_ROLE_ID);
+        assertThat(repo.findRoleCodesByUserId(userId)).containsExactly("ADMIN");
+
+        repo.revoke(userId, ADMIN_ROLE_ID);
+
+        assertThat(repo.findRoleCodesByUserId(userId)).isEmpty();
+    }
+
+    @Test
+    void revokeOfNonExistentIsNoop() {
+        UUID userId = seedUser("revoke-absent@example.com");
+
+        // No assignment exists — revoke must neither throw nor delete anything else.
+        repo.revoke(userId, ADMIN_ROLE_ID);
+
+        assertThat(repo.findRoleCodesByUserId(userId)).isEmpty();
+    }
+
     /**
      * Inserts a minimal {@code users} row so we can satisfy the FK on
      * {@code user_roles.user_id}. Each test uses its own email to avoid

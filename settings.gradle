@@ -14,7 +14,8 @@ dependencyResolutionManagement {
 rootProject.name = 'kiln'
 
 include 'app'
+include 'audit'
+include 'auth'
 include 'common'
 include 'infra'
 include 'user'
-include 'auth'

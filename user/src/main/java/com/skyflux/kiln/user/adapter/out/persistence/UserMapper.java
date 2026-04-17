@@ -5,6 +5,7 @@ import com.skyflux.kiln.user.domain.model.User;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
@@ -16,17 +17,26 @@ import java.time.ZoneOffset;
  * the domain model today — they are synthesized at write time (UTC) and
  * discarded on read. When the aggregate eventually exposes audit times, this
  * mapper should be the first class to update.
+ *
+ * <p>Phase 4.3 Wave 1 adds {@code failed_login_attempts} / {@code locked_until}
+ * round-trip. {@code locked_until} is nullable on both sides: {@code null}
+ * means "not locked". The DB column is {@code TIMESTAMPTZ}; jOOQ surfaces it
+ * as {@link OffsetDateTime}, which converts losslessly to/from {@link Instant}.
  */
 @Component
 class UserMapper {
 
     /** jOOQ record (DB row) → domain aggregate. Uses {@code reconstitute}, never {@code register}. */
     User toAggregate(UsersRecord record) {
+        Integer failed = record.getFailedLoginAttempts();
+        OffsetDateTime lockedUntil = record.getLockedUntil();
         return User.reconstitute(
                 new UserId(record.getId()),
                 record.getName(),
                 record.getEmail(),
-                record.getPasswordHash());
+                record.getPasswordHash(),
+                failed == null ? 0 : failed,
+                lockedUntil == null ? null : lockedUntil.toInstant());
     }
 
     /**
@@ -46,6 +56,9 @@ class UserMapper {
         record.setPasswordHash(user.passwordHash());
         record.setCreatedAt(now);
         record.setUpdatedAt(now);
+        record.setFailedLoginAttempts(user.failedLoginAttempts());
+        Instant lockedUntil = user.lockedUntil();
+        record.setLockedUntil(lockedUntil == null ? null : lockedUntil.atOffset(ZoneOffset.UTC));
         return record;
     }
 }

@@ -84,8 +84,9 @@ class UserControllerTest {
         UserId id = new UserId(uuid);
         when(registerUseCase.execute(any(RegisterUserUseCase.Command.class))).thenReturn(id);
 
+        // Wave 3: @StrongPassword (min 10 chars, letter + non-letter) required.
         String body = """
-                {"name":"Alice","email":"alice@example.com","password":"S3cret-pw"}
+                {"name":"Alice","email":"alice@example.com","password":"S3cret-pw-ok"}
                 """;
 
         mvc.perform(post("/api/v1/users")
@@ -132,5 +133,51 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    // --- Wave 3: @StrongPassword wired into register DTO ---
+
+    @Test
+    void post_with_short_password_returns_400() throws Exception {
+        // 8 chars, letter+digit — passes @Size(min=1) but fails @StrongPassword (min 10).
+        String body = """
+                {"name":"Alice","email":"alice@example.com","password":"Abcdefg1"}
+                """;
+
+        mvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void post_with_password_missing_non_letter_returns_400() throws Exception {
+        // 10+ chars all letters — fails @StrongPassword (must have non-letter).
+        String body = """
+                {"name":"Alice","email":"alice@example.com","password":"abcdefghij"}
+                """;
+
+        mvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void post_with_strong_password_returns_201() throws Exception {
+        UUID uuid = UUID.randomUUID();
+        UserId id = new UserId(uuid);
+        when(registerUseCase.execute(any(RegisterUserUseCase.Command.class))).thenReturn(id);
+
+        // 11 chars, has letter + digit.
+        String body = """
+                {"name":"Alice","email":"alice@example.com","password":"Abcdefghij1"}
+                """;
+
+        mvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(uuid.toString()));
     }
 }
