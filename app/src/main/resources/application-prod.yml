@@ -1,3 +1,16 @@
+spring:
+  datasource:
+    url: ${DB_URL}     # fail-fast if missing (no default)
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      leak-detection-threshold: 60000   # 60s
+  flyway:
+    clean-disabled: true   # safety: never truncate prod
+    validate-on-migrate: true
+
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework

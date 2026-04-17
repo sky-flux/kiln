@@ -7,8 +7,10 @@ import com.skyflux.kiln.user.application.port.out.UserRepository;
 import com.skyflux.kiln.user.domain.model.User;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional(readOnly = true)
 class GetUserService implements GetUserUseCase {
 
     private final UserRepository repo;

@@ -41,4 +41,24 @@ class UserTest {
         assertThat(u.name()).isEqualTo("Bob");
         assertThat(u.email()).isEqualTo("bob@example.com");
     }
+
+    @Test
+    void registerLowercasesAndTrimsEmail() {
+        User u = User.register("Alice", "  ALICE@EXAMPLE.COM  ");
+        assertThat(u.email()).isEqualTo("alice@example.com");
+    }
+
+    @Test
+    void registerTrimsName() {
+        User u = User.register("  Alice  ", "alice@example.com");
+        assertThat(u.name()).isEqualTo("Alice");
+    }
+
+    @Test
+    void reconstituteDoesNotNormalize() {
+        UserId existing = UserId.newId();
+        User u = User.reconstitute(existing, "Alice", "Alice@EXAMPLE.com");
+        assertThat(u.email()).isEqualTo("Alice@EXAMPLE.com");
+        assertThat(u.name()).isEqualTo("Alice");
+    }
 }

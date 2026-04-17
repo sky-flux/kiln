@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 import java.util.UUID;
@@ -14,11 +15,13 @@ import java.util.UUID;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
 
 /**
- * End-to-end smoke test for Phase 2 wiring: auto-wrapping of responses,
- * exception-to-R translation, MDC trace-id header echo, and Actuator bypass.
+ * End-to-end smoke test: auto-wrapping of responses, exception-to-R
+ * translation, MDC trace-id header echo, Actuator bypass, jOOQ-backed
+ * persistence via Flyway-migrated Testcontainers PostgreSQL.
  */
 @SpringBootTest(webEnvironment = RANDOM_PORT)
 @AutoConfigureRestTestClient
+@Import(TestcontainersConfiguration.class)
 class KilnIntegrationTest {
 
     @Autowired
@@ -93,6 +96,76 @@ class KilnIntegrationTest {
                 .expectBody()
                 .jsonPath("$.status").isEqualTo("UP")
                 .jsonPath("$.code").doesNotExist();
+    }
+
+    // ──────────── Gate 3 fixes — POST write path e2e ────────────
+
+    @Test
+    void registerThenGetRoundTrips() {
+        // C2 + I1 e2e: POST creates user → GET by id returns same user,
+        // R-wrapped. Also verifies Flyway migrations ran against Testcontainers.
+        String created = client.post().uri("/api/v1/users")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body("""
+                        {"name":"RT","email":"rt@example.com"}
+                        """)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(String.class)
+                .returnResult().getResponseBody();
+        // The 201 body is R-wrapped by ResponseBodyWrapAdvice → { code:0, data:{ id:"..." } }
+        org.assertj.core.api.Assertions.assertThat(created).contains("\"code\":0", "\"data\"");
+
+        // Extract id from response
+        String idToken = created.replaceAll(".*\"id\"\\s*:\\s*\"", "").replaceAll("\".*", "");
+
+        client.get().uri("/api/v1/users/{id}", idToken)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(0)
+                .jsonPath("$.data.name").isEqualTo("RT")
+                .jsonPath("$.data.email").isEqualTo("rt@example.com");
+    }
+
+    @Test
+    void postBlankNameReturns400WithValidationCode() {
+        // C2: end-to-end assert R-wrapped VALIDATION_FAILED on Bean Validation reject
+        client.post().uri("/api/v1/users")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body("""
+                        {"name":"","email":"ok@example.com"}
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1006)    // AppCode.VALIDATION_FAILED
+                .jsonPath("$.data").doesNotExist();
+    }
+
+    @Test
+    void duplicateEmailReturns409Conflict() {
+        // I1 e2e: second POST with same email (case-variant) triggers CONFLICT
+        String body1 = """
+                {"name":"Dup1","email":"dup-e2e@example.com"}
+                """;
+        client.post().uri("/api/v1/users")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(body1)
+                .exchange()
+                .expectStatus().isCreated();
+
+        // Same email but different casing — domain normalization should result in conflict
+        String body2 = """
+                {"name":"Dup2","email":"DUP-e2e@Example.com"}
+                """;
+        client.post().uri("/api/v1/users")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(body2)
+                .exchange()
+                .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1004);  // AppCode.CONFLICT
     }
 
     private UserId seedKnownUser() {

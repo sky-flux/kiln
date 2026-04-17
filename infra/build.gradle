@@ -1,3 +1,7 @@
+plugins {
+    id 'nu.studer.jooq'
+}
+
 dependencies {
     api project(':common')
 
@@ -9,7 +13,70 @@ dependencies {
     // OpenAPI / Swagger UI (Ch.15)
     api 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
 
-    // Phase 3+: jOOQ, Flyway, Postgres
+    // Phase 3: jOOQ, Flyway, Postgres
+    api 'org.springframework.boot:spring-boot-starter-jdbc'
+    api 'org.springframework.boot:spring-boot-starter-jooq'
+    api 'org.jooq:jooq:3.20.0'
+    // Pin jOOQ codegen stack to 3.20.0; Spring Boot 4 BOM still pins jooq:3.19.31,
+    // which clashes with jooq-codegen 3.20.0 (NoSuchMethodError on Jdbc.getUrlProperty()).
+    jooqGenerator 'org.jooq:jooq:3.20.0'
+    jooqGenerator 'org.jooq:jooq-meta:3.20.0'
+    jooqGenerator 'org.jooq:jooq-codegen:3.20.0'
+    jooqGenerator 'org.jooq:jooq-meta-extensions:3.20.0'
+    jooqGenerator 'org.postgresql:postgresql:42.7.4'
+
+    // Spring Boot 4 split Flyway autoconfig into a separate module.
+    // `flyway-core` alone puts the runtime on classpath but NOT the autoconfig,
+    // so migrations silently don't run. Always use the starter.
+    api 'org.springframework.boot:spring-boot-starter-flyway'
+    api 'org.flywaydb:flyway-database-postgresql:11.14.0'
+
+    runtimeOnly 'org.postgresql:postgresql:42.7.4'
+
+    // Testcontainers (Boot 3.1+ @ServiceConnection) — api so downstream modules
+    // can use integration test utilities without re-declaring the dep.
+    api 'org.springframework.boot:spring-boot-testcontainers'
+    api 'org.testcontainers:postgresql:1.21.3'
+
     // Phase 4+: Redis, Redisson, Spring Security, Sa-Token
     // Phase 6+: JobRunr, Flowable, BouncyCastle
+}
+
+jooq {
+    version = '3.20.0'
+    configurations {
+        main {
+            generateSchemaSourceOnCompilation = true
+            generationTool {
+                logging = org.jooq.meta.jaxb.Logging.WARN
+                generator {
+                    name = 'org.jooq.codegen.JavaGenerator'
+                    database {
+                        name = 'org.jooq.meta.extensions.ddl.DDLDatabase'
+                        properties {
+                            // DDLDatabase 3.20 accepts an explicit path or file: URL but is
+                            // silent on Ant-glob misses ("**/*.sql" matches nothing from the
+                            // codegen working dir). Using projectDir + explicit file pattern
+                            // keeps the task robust regardless of invocation cwd.
+                            property { key = 'scripts'; value = "${project.projectDir}/src/main/resources/db/migration/".toString() }
+                            property { key = 'sort'; value = 'flyway' }
+                            property { key = 'defaultNameCase'; value = 'lower' }
+                        }
+                    }
+                    generate {
+                        records = true
+                        deprecated = false
+                        relations = true
+                        fluentSetters = true
+                        javaTimeTypes = true
+                        pojosEqualsAndHashCode = true
+                    }
+                    target {
+                        packageName = 'com.skyflux.kiln.infra.jooq.generated'
+                        directory = 'build/generated-src/jooq/main'
+                    }
+                }
+            }
+        }
+    }
 }

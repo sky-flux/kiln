@@ -1,3 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/kiln_dev
+  flyway:
+    clean-disabled: false   # dev only — prod must keep it true (default)
+
 server:
   port: 8080
 

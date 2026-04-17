@@ -28,10 +28,29 @@ public final class User {
         }
     }
 
+    /**
+     * Factory for newly-registered users. Normalizes inputs so application-level
+     * uniqueness on {@code email} is case-insensitive (the DB's {@code UNIQUE}
+     * constraint on {@code email} is case-sensitive).
+     *
+     * <ul>
+     *   <li>{@code name}: trimmed</li>
+     *   <li>{@code email}: trimmed + lowercased (using {@link java.util.Locale#ROOT}
+     *       so the result is stable regardless of host locale)</li>
+     * </ul>
+     */
     public static User register(String name, String email) {
-        return new User(UserId.newId(), name, email);
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(email, "email");
+        String normalizedName = name.trim();
+        String normalizedEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
+        return new User(UserId.newId(), normalizedName, normalizedEmail);
     }
 
+    /**
+     * Factory for rebuilding an already-persisted user. Does NOT normalize —
+     * the DB state is authoritative and must be preserved byte-for-byte.
+     */
     public static User reconstitute(UserId id, String name, String email) {
         return new User(id, name, email);
     }
