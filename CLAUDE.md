@@ -178,6 +178,7 @@ Uses the [gitmoji](https://gitmoji.dev/) convention — the emoji **is** the typ
 ### Rules
 
 - Every commit starts with a gitmoji emoji.
+- **Subject is verb-first, imperative mood** — the first word after the emoji is a verb (`add`, `fix`, `introduce`, `remove`, `restructure`, `document`, `upgrade`, …). No noun prefixes like `Phase 3: …`, `CLAUDE.md: …`, or scope labels. Complete the sentence *"If applied, this commit will ___"*. Exception: `🎉 initial commit` is the gitmoji-sanctioned fixed phrase for the first project commit.
 - Subject line ≤ 72 characters.
 - Body optional; when used, a short paragraph or `-` bullets explaining what/why.
 - **No AI attribution** — never add `Co-Authored-By: Claude`, `Generated with …`, or any AI-tool footer.
