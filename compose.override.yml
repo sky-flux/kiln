@@ -1,12 +1,11 @@
-# Development overrides — auto-loaded by `docker compose up`.
-# Exposes DB and Redis to host so `./gradlew :app:bootRun` (on the host) can connect.
-# Prod does NOT load this file, so prod keeps DB/Redis internal to the compose network.
-
-services:
-  postgres:
-    ports:
-      - "5432:5432"
-
-  redis:
-    ports:
-      - "6379:6379"
+# Placeholder for developer-local docker compose overrides.
+#
+# Previously, this file published postgres:5432 and redis:6379 to the host so
+# that `./gradlew :app:bootRun` on the host could connect. Those port mappings
+# now live in the base `compose.yml` because Spring Boot's docker-compose
+# module can't auto-merge an override file (it invokes docker with a single
+# `-f` flag, which disables override auto-merging).
+#
+# `docker compose up` still auto-merges this file in dev — add any
+# developer-local tweaks here (extra tooling containers, ephemeral volumes,
+# etc.). Keep production-shared changes in compose.yml instead.

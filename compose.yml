@@ -1,6 +1,14 @@
 # Base definition — shared by all environments.
 #   Dev:  docker compose up -d                                   (compose.override.yml auto-merged)
 #   Prod: docker compose -f compose.yml -f compose.prod.yml up -d
+#
+# IMPORTANT: base publishes postgres:5432 and redis:6379 to the host. This is
+# required by Spring Boot's spring-boot-docker-compose module (bootRun), which
+# invokes docker with a single `-f` flag and therefore won't auto-merge an
+# override file. Prod MUST use `-f compose.prod.yml`, which sets `ports: []`
+# to keep the DB / Redis internal to the compose network.
+
+name: kiln
 
 services:
   postgres:
@@ -11,6 +19,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-kiln}"]
@@ -22,6 +32,8 @@ services:
     image: redis:8-alpine
     volumes:
       - redis-data:/data
+    ports:
+      - "6379:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

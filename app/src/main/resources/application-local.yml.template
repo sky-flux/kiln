@@ -1,8 +1,15 @@
-# Copy to application-local.yml and fill in local credentials.
-# application-local.yml is gitignored.
+# Optional — local dev does NOT require this file.
+#
+# Spring Boot's spring-boot-docker-compose module (developmentOnly dep) detects
+# compose.yml on ./gradlew :app:bootRun, starts postgres:18 + redis:8 if not
+# already running, and wires the datasource + Redis via @ServiceConnection.
+#
+# Copy this template to application-local.yml (gitignored) only when you need
+# to override the defaults — e.g. connecting to a remote DB instead of the
+# local compose-managed Postgres.
 #
 # spring:
 #   datasource:
-#     url: jdbc:postgresql://localhost:5432/kiln
-#     username: postgres
-#     password: postgres
+#     url: jdbc:postgresql://remote-host:5432/kiln
+#     username: myuser
+#     password: mypass

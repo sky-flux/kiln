@@ -149,17 +149,23 @@ Rules when delegating:
 ## Local Development
 
 ```bash
-# Start infrastructure (postgres:18 on 5432, redis:8 on 6379)
+# One command — Spring Boot's spring-boot-docker-compose module (developmentOnly
+# dep) starts postgres:18 + redis:8 from compose.yml on first run and wires the
+# datasource / Redis via @ServiceConnection. Subsequent runs reuse the running
+# containers (lifecycle-management: start-only; `docker compose down` to reset).
+./gradlew :app:bootRun
+
+# Optional: start infrastructure explicitly — useful when running psql/redis-cli
+# against the local DB before the app is up.
 docker compose up -d
 
-# Create your local overrides from the template (gitignored)
+# Optional: override connection (remote DB, different creds). application-local.yml
+# is gitignored; template documents the shape.
 cp app/src/main/resources/application-local.yml.template \
    app/src/main/resources/application-local.yml
 
-# Run the app (Spring Boot picks up application-local.yml via profile)
-./gradlew :app:bootRun
-
-# Build an executable jar
+# Build an executable jar (spring-boot-docker-compose is developmentOnly — not
+# bundled in the prod jar, so `java -jar` won't touch Docker).
 ./gradlew :app:bootJar
 java -jar app/build/libs/app.jar
 
@@ -261,5 +267,9 @@ These are traps we have already stepped on in Phase 1 / Phase 2. Check here firs
 | Testcontainers's Ryuk sidecar fails to start on Colima: `Container startup failed for image testcontainers/ryuk:0.14.0` | Ryuk (cleanup helper) has compat issues with some Colima configurations (cgroup/namespace). | Disable Ryuk on dev machines: `~/.testcontainers.properties` → `ryuk.disabled=true`, OR env var `TESTCONTAINERS_RYUK_DISABLED=true`. Trade-off: orphaned test containers aren't auto-killed; clean manually with `docker ps -a \| grep testcontainers \| awk '{print $1}' \| xargs docker rm -f`. |
 | Test fails with `No qualifying bean of type 'com.fasterxml.jackson.databind.ObjectMapper'` | Spring Boot 4 provides Jackson 3's `tools.jackson.databind.JsonMapper`, NOT the Jackson 2 `com.fasterxml.jackson.databind.ObjectMapper`. Test code that `@Autowired ObjectMapper` from the classic package fails to resolve. | Don't auto-wire ObjectMapper in tests. Build JSON bodies as raw String literals (text blocks work great) or use `tools.jackson.databind.JsonMapper` if really needed. |
 | `@SpringBootTest` with `classes = SomeTestConfig.class` doesn't load `application.yml` even though `SomeTestConfig` is `@SpringBootApplication` | The test classpath may not include the module that owns `application.yml`. In this project, `application.yml` lives in `app/`, so `user:test` doesn't see it — datasource defaults come from elsewhere. | Either add `user/src/test/resources/application.yml` for module-scoped config, or rely on `@ServiceConnection` Testcontainers (which overrides datasource regardless of yaml). |
+| `./gradlew :<mod>:pitest` fails at plugin-apply with `Could not get unknown property 'baseDir' for extension 'reporting'` | `info.solidsoft.pitest:1.15.0` uses `reporting.baseDir` which Gradle 8.2+ removed. | Use `info.solidsoft.pitest:1.19.0` (or newer). Versions before 1.19 are incompatible with Gradle 9. |
+| PIT fails with `Unsupported class file major version 69` (ASM `ClassReader`) | `pitestVersion` too old. PIT's bundled ASM doesn't recognise Java 25 bytecode (major 69) until 1.19+. | Pin `pitestVersion = '1.23.0'` (or newer `1.19+`) in the `pitest {}` block. The Gradle plugin version and the PIT core version are independent — both must be modern for Java 25. |
+| PIT minion exits with `Coverage generator Minion exited abnormally due to UNKNOWN_ERROR` → `OutputDirectoryCreator not available; probably due to unaligned versions of the junit-platform-engine and junit-platform-launcher jars` | The `info.solidsoft.pitest` Gradle plugin leaks `junit-platform-launcher:1.10.2` onto the PIT runtime classpath, while Spring Boot 4 BOM + `junit-jupiter-engine:6.0.3` are loaded from `testRuntimeClasspath`. The mixed 1.10 launcher + 6.0 engine combination triggers the `OutputDirectoryCreator` missing-method error inside Jupiter's `discover()`. | Force JUnit Platform 6.0.3 on BOTH the `pitest` config AND the `testRuntimeClasspath` via `resolutionStrategy.eachDependency`, AND explicitly add `pitest 'org.junit.platform:junit-platform-launcher:6.0.3'` so the newer launcher appears on the pit classpath before the older one. See `user/build.gradle` for the exact recipe. |
+| PIT minion crashes silently when target module has `@SpringBootTest` / `@Testcontainers` tests on the test classpath (even if not the target of a given PIT run) | PIT's coverage pre-scan tries to instantiate every test class on the classpath. Spring / Testcontainers tests start a context / Docker container inside the minion JVM, which then dies. | Restrict via `targetTests = [...]` AND `excludedTestClasses = [...]` in the `pitest {}` block so only pure-JUnit-5 unit tests are discovered. See `user/build.gradle` — adapter-layer tests are excluded. |
 
 When stepping on a new trap not listed here, **add it to this table** before marking the task complete. This file is load-bearing institutional memory — Phase 3+ will save hours from this list.

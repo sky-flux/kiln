@@ -12,6 +12,7 @@ dependencies {
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
@@ -29,4 +30,13 @@ dependencies {
 
 bootJar {
     archiveFileName = 'app.jar'
+}
+
+// bootRun must run from the repo root so `spring.docker.compose.file: compose.yml`
+// (a relative path in application.yml) resolves against the root-level compose.yml
+// instead of the subproject dir. Matches what devs do when typing
+// `./gradlew :app:bootRun` from the repo root, and what IDE Run Configs usually
+// default to as well.
+bootRun {
+    workingDir = rootProject.projectDir
 }

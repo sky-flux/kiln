@@ -32,6 +32,15 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
 
+  # Auto-start compose.yml on bootRun (module loaded via developmentOnly scope;
+  # excluded from bootJar, skipped in tests). start-only keeps containers alive
+  # across app restarts for fast iteration — devs can `docker compose down`
+  # explicitly when they want a clean slate.
+  docker:
+    compose:
+      file: compose.yml
+      lifecycle-management: start-only
+
   # Jackson (Spring Boot 4 / Jackson 3 — defaults already match our needs;
   # fine-grained feature toggles live in Phase 2's JacksonConfig bean)
   jackson:

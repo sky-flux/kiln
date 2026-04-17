@@ -35,12 +35,14 @@ services:
           memory: 1g
 
   postgres:
+    ports: []   # suppress base host-publish; prod keeps DB internal to compose network
     deploy:
       resources:
         limits:
           memory: 512m
 
   redis:
+    ports: []   # suppress base host-publish; prod keeps Redis internal to compose network
     deploy:
       resources:
         limits:
