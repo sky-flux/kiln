@@ -1,3 +1,7 @@
+plugins {
+    id 'info.solidsoft.pitest' version '1.19.0'
+}
+
 dependencies {
     implementation project(':common')
     implementation project(':infra')
@@ -9,3 +13,82 @@ dependencies {
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.3.0'
     testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
 }
+
+pitest {
+    pitestVersion = '1.23.0'
+    targetClasses = [
+        'com.skyflux.kiln.user.domain.*',
+        'com.skyflux.kiln.user.application.usecase.*'
+    ]
+    // I4: PIT's excludedClasses uses DOTTED class-name globs (not Ant filesystem
+    // path globs). `**/*package-info*` would match nothing and is harmless today
+    // only because PIT skips package-info bytecode anyway. Use dotted form.
+    excludedClasses = [
+        'com.skyflux.kiln.user.*.package-info',
+        'com.skyflux.kiln.user.**.package-info',
+    ]
+    // Only run pure-unit tests against domain + usecase targets. Spring-wired /
+    // Testcontainers tests (AuthController, UserController, UserJooqRepositoryAdapter)
+    // crash PIT's coverage minion — they need a full Spring context + Postgres container
+    // which PIT's pre-scan JVM can't spin up. Keep the mutation lens on domain logic.
+    targetTests = [
+        'com.skyflux.kiln.user.domain.*',
+        'com.skyflux.kiln.user.application.usecase.*'
+    ]
+    excludedTestClasses = [
+        'com.skyflux.kiln.user.adapter.*',
+        'com.skyflux.kiln.user.adapter.in.web.*',
+        'com.skyflux.kiln.user.adapter.out.persistence.*',
+        'com.skyflux.kiln.user.ArchitectureTest'
+    ]
+    junit5PluginVersion = '1.2.3'
+    outputFormats = ['HTML', 'XML']
+    timestampedReports = false
+    threads = 4
+    // Baseline measured Phase 4.1: 21 of 22 mutations killed (95%), line coverage
+    // 97% (69/71). The single non-killed mutation is NO_COVERAGE on UserId.of(String)
+    // — no unit test exercises that happy path directly; Gate 3 should add a
+    // dedicated UserIdTest. Thresholds sit 5pts below baseline so the build tolerates
+    // a one-mutation swing without going red, while any real regression fails fast.
+    mutationThreshold = 90
+    coverageThreshold = 90
+}
+
+// pitest 1.19.0 leaks junit-platform-launcher 1.10.2 into the minion classpath via
+// buildscript deps. Mixed with engine 6.x from test classpath → `OutputDirectoryCreator
+// not available`. Only the EXPLICIT launcher entry is still module-local; the general
+// platform version alignment is in root build.gradle (Phase 4.1 I5).
+dependencies {
+    pitest 'org.junit.platform:junit-platform-launcher:6.0.3'
+}
+
+// JaCoCo coverage verification.
+// Measured baseline (Phase 4.1): LINE 94.85%, BRANCH 91.67%.
+// Aspirational target (docs/testing.md §13 / §4.7): LINE 85%, BRANCH 75%.
+// The measured coverage comfortably exceeds the aspirational target thanks to
+// 61 tests spanning domain (UserTest), application (Register/Auth/GetUser),
+// slice (User/AuthControllerTest) and integration (UserJooqRepositoryAdapterTest).
+// Thresholds are set ~5pts below the measured baseline so ordinary refactors
+// don't break the build but a substantial regression will.
+//
+// Under-covered hotspot: `com.skyflux.kiln.user.config.UserModuleConfig` sits at
+// 0% — it's a bare `@Configuration` marker with only a synthetic constructor, no
+// behavior worth testing. Left in the bundle so the overall number stays honest;
+// the chosen thresholds account for it.
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.85
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

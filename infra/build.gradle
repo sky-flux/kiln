@@ -104,3 +104,29 @@ jooq {
         }
     }
 }
+
+// JaCoCo coverage verification.
+// Measured baseline (Phase 4.1, :infra:test only): LINE 97.16%, BRANCH 84.72%.
+// Aspirational target (docs/testing.md §13 / §4.6): LINE 70%, BRANCH 60%.
+// The actual infra coverage exceeds the aspirational target — Argon2id, MdcFilter,
+// GlobalExceptionHandler, CORS/Jackson/OpenAPI configs all have rich unit & slice tests.
+// Thresholds are set modestly below the measured baseline (LINE -7pts, BRANCH -10pts)
+// because branch coverage on infra is dominated by a few error-handler branches whose
+// exhaustiveness can oscillate as new exception mappings are added.
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.75
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

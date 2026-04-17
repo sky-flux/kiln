@@ -18,6 +18,7 @@ allprojects {
 subprojects {
     apply plugin: 'java-library'
     apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
 
     java {
         toolchain {
@@ -42,4 +43,77 @@ subprojects {
         useJUnitPlatform()
         jvmArgs '-XX:+EnableDynamicAgentLoading'
     }
+
+    // JUnit Platform alignment — centralised so Phase 5 new modules don't
+    // rediscover this trap.
+    //
+    // Phase 4.1 review I5: both archunit-junit5:1.3.0 (test deps) and
+    // the pitest plugin 1.19.0 (pitest config) drag in junit-platform-*
+    // 1.10.2, while Spring Boot 4.0.5's BOM ships junit-bom 6.0.3. Gradle
+    // resolved the launcher to 1.10.2 and the engine to 6.0.3, yielding
+    // `OutputDirectoryCreator not available`. Force every platform artifact
+    // to 6.0.3 in the test classpaths (and in `pitest` where the config exists).
+    configurations.configureEach {
+        if (name in ['testRuntimeClasspath', 'testCompileClasspath', 'pitest']) {
+            resolutionStrategy.eachDependency { details ->
+                if (details.requested.group == 'org.junit.platform') {
+                    details.useVersion('6.0.3')
+                    details.because('align JUnit Platform with Spring Boot 4 BOM (Phase 4.1 trap I5)')
+                }
+            }
+        }
+    }
+
+    // JaCoCo — code coverage across all modules.
+    // See docs/testing.md §13 for per-layer aspirational targets. Thresholds
+    // in each module's build.gradle are intentionally set BELOW measured baseline
+    // (current - 5%) to avoid blocking the build while giving us a regression floor.
+    //
+    // Version note: docs/testing.md §13 suggests 0.8.12, but Java 25 compiles to
+    // class-file major version 69 which 0.8.12 rejects with
+    // `IllegalArgumentException: Unsupported class file major version 69`.
+    // JaCoCo 0.8.14 (2025-09) added Java 25 support — keep this pinned to 0.8.14+.
+    jacoco {
+        toolVersion = '0.8.14'
+    }
+
+    // Classes excluded from BOTH the HTML/XML report and the verification rule.
+    // Kept as a shared closure so the report and the verification task see the
+    // same bytecode view (a drift between the two was caught in Phase 4.1:
+    // the report said 97%, verification said 69% — the delta was 650+ jOOQ
+    // generated classes being counted only by the verification task).
+    ext.jacocoExcludedClasses = [
+        // jOOQ generated code — machine-generated, not ours
+        'com/skyflux/kiln/infra/jooq/generated/**',
+        // package-info classes — no behavior
+        '**/package-info*',
+    ]
+
+    jacocoTestReport {
+        dependsOn test
+        reports {
+            xml.required = true     // machine-readable for CI
+            html.required = true    // human-readable locally
+            csv.required = false
+        }
+
+        afterEvaluate {
+            classDirectories.setFrom(files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: project.ext.jacocoExcludedClasses)
+            }))
+        }
+    }
+
+    jacocoTestCoverageVerification {
+        dependsOn jacocoTestReport
+
+        afterEvaluate {
+            classDirectories.setFrom(files(classDirectories.files.collect {
+                fileTree(dir: it, exclude: project.ext.jacocoExcludedClasses)
+            }))
+        }
+    }
+
+    // Always produce the report after tests run
+    test.finalizedBy jacocoTestReport
 }

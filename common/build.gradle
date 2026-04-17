@@ -1,5 +1,54 @@
+plugins {
+    id 'info.solidsoft.pitest' version '1.19.0'
+}
+
 dependencies {
     api 'org.slf4j:slf4j-api'
     api 'jakarta.validation:jakarta.validation-api:3.1.0'
     api 'com.fasterxml.jackson.core:jackson-annotations'
 }
+
+pitest {
+    pitestVersion = '1.23.0'                     // Core PIT, independent of the Gradle plugin version; must be new enough for Java 25 bytecode (class file major 69)
+    targetClasses = ['com.skyflux.kiln.common.*']
+    // I6: `common.constant` has only package-info today (no classes). Leave the
+    // entry as a speculative placeholder for when Constants / AppConstants lands.
+    // Non-matching globs are harmless to PIT.
+    excludedClasses = [
+        'com.skyflux.kiln.common.constant.*',    // placeholder — no classes yet
+        'com.skyflux.kiln.common.*.package-info',
+    ]
+    // ONLY JUnit 5 tests run
+    junit5PluginVersion = '1.2.3'
+    outputFormats = ['HTML', 'XML']
+    timestampedReports = false
+    threads = 4
+    // Baseline measured Phase 4.1: mutation score 100% (26/26 killed), line coverage 100%.
+    // Thresholds set 5 points below baseline to tolerate trivial fluctuation without
+    // going permanently red; well above the docs/testing.md §13 floor of 75.
+    mutationThreshold = 95
+    coverageThreshold = 95
+}
+
+// JaCoCo coverage verification.
+// Measured baseline (Phase 4.1): LINE 90.24%, BRANCH 100.00% (14/14 branches).
+// Aspirational target (docs/testing.md §13 / §4.1): LINE 90%, BRANCH 85%.
+// Thresholds are set slightly below the measured baseline so a small regression
+// is tolerated while the overall direction stays enforced.
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.85
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.90
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

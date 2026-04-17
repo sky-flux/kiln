@@ -26,6 +26,12 @@ dependencies {
     // `com.redis:testcontainers-redis` provides @ServiceConnection-aware RedisContainer.
     // Not transitive from infra:testImplementation, so declare it here explicitly.
     testImplementation 'com.redis:testcontainers-redis:2.2.4'
+
+    // Phase 4.1: OpenAPI contract snapshot test (see docs/testing.md §12.1).
+    // JSONAssert gives us order-insensitive JSON comparison with a `NON_EXTENSIBLE`
+    // mode that tolerates whitespace / key-order differences but fails on any
+    // structural or semantic diff — exactly the right strictness for a contract.
+    testImplementation 'org.skyscreamer:jsonassert:1.5.3'
 }
 
 bootJar {
@@ -40,3 +46,47 @@ bootJar {
 bootRun {
     workingDir = rootProject.projectDir
 }
+
+// Phase 4.1: Refreshes docs/openapi-snapshot.json from the live /v3/api-docs
+// endpoint. Run after a deliberate API change, then commit the snapshot update
+// together with the code change so the API diff is visible in PR review.
+//
+//   ./gradlew :app:updateOpenApiSnapshot
+//
+// Requires Docker (Testcontainers PG + Redis are started under the hood).
+tasks.register('updateOpenApiSnapshot', JavaExec) {
+    group = 'documentation'
+    description = 'Refreshes docs/openapi-snapshot.json from the live OpenAPI endpoint.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.skyflux.kiln.OpenApiSnapshotRefresh'
+    systemProperty 'testcontainers.ryuk.disabled', 'true'
+}
+
+// JaCoCo coverage verification.
+// Measured baseline (Phase 4.1): LINE 33.33% (1/3), no branches tracked.
+// Aspirational target (docs/testing.md §13 / §4.7): LINE 50%, BRANCH 40%.
+// The `app` module is effectively pure wiring — only KilnApplication with a
+// synthetic default constructor plus the `main` entry point. The 12 tests in
+// this module are integration-focused (contextLoads, Modulith, E2E HTTP round-trip)
+// and drive behavior in OTHER modules. Per-module JaCoCo only measures bytecode
+// that lives inside `app/src/main/java`, so low line coverage here does not
+// indicate untested code — it's a measurement artefact of the monorepo layout.
+//
+// Threshold is kept permissive (LINE 25% ≈ measured - 8pts) so the rule catches
+// only a genuine structural regression (e.g. someone adding real behavior here
+// without tests) rather than ordinary changes to KilnApplication.
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.25
+            }
+            // No BRANCH rule — there are 0 branches in this bundle and JaCoCo
+            // rejects ratio rules on zero-denominator counters.
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
