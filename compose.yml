@@ -1,5 +1,5 @@
 # Base definition — shared by all environments.
-#   Dev:  docker compose up -d                                   (compose.override.yml auto-merged)
+#   Dev:  docker compose up -d
 #   Prod: docker compose -f compose.yml -f compose.prod.yml up -d
 #
 # IMPORTANT: base publishes postgres:5432 and redis:6379 to the host. This is

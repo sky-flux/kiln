@@ -170,7 +170,7 @@ class ResponseBodyWrapAdviceTest {
         Object result = advice.beforeBodyWrite(
                 body, mp, MediaType.APPLICATION_JSON,
                 org.springframework.http.converter.json.JacksonJsonHttpMessageConverter.class,
-                request("/v3/api-docs"), response());
+                request("/docs.json"), response());
 
         assertThat(result).isSameAs(body);
     }
@@ -209,7 +209,7 @@ class ResponseBodyWrapAdviceTest {
 
         Object api = advice.beforeBodyWrite(body, mp, MediaType.APPLICATION_JSON,
                 org.springframework.http.converter.json.JacksonJsonHttpMessageConverter.class,
-                request("/v3/api-docs-fake"), response());
+                request("/docsfake"), response());
         assertThat(api).isInstanceOf(R.class);
 
         Object sw = advice.beforeBodyWrite(body, mp, MediaType.APPLICATION_JSON,
@@ -231,7 +231,7 @@ class ResponseBodyWrapAdviceTest {
 
         Object docs = advice.beforeBodyWrite(body, mp, MediaType.APPLICATION_JSON,
                 org.springframework.http.converter.json.JacksonJsonHttpMessageConverter.class,
-                request("/v3/api-docs"), response());
+                request("/docs"), response());
         assertThat(docs).isSameAs(body);
     }
 

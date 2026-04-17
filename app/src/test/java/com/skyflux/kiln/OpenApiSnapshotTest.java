@@ -56,7 +56,7 @@ class OpenApiSnapshotTest {
 
     @Test
     void openApiDocumentMatchesCommittedSnapshot() throws Exception {
-        String live = client.get().uri("/v3/api-docs")
+        String live = client.get().uri("/docs.json")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(String.class)
@@ -82,7 +82,7 @@ class OpenApiSnapshotTest {
      * the first bytes look like.
      *
      * <p>Note: springdoc excludes {@code /actuator/**} from
-     * {@code /v3/api-docs} by default — those endpoints are framework-supplied
+     * {@code /docs.json} by default — those endpoints are framework-supplied
      * and intentionally not part of the API contract this snapshot tracks (L2).
      */
     static String normalize(String json) throws JSONException {

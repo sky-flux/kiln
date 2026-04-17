@@ -79,12 +79,18 @@ public class ResponseBodyWrapAdvice implements ResponseBodyAdvice<Object> {
             return false;
         }
         return matchesPrefix(path, "/actuator")
-                || matchesPrefix(path, "/v3/api-docs")
+                || matchesPrefix(path, "/docs")
                 || matchesPrefix(path, "/swagger-ui");
     }
 
-    /** Anchor prefix: match exact base path or base followed by "/". */
+    /**
+     * Anchor prefix: match exact base, {@code base/...}, or {@code base.ext}
+     * (for paths like {@code /docs.json} / {@code /docs.yaml} where the
+     * extension is part of the logical endpoint, not a sub-path).
+     */
     private static boolean matchesPrefix(String path, String base) {
-        return path.equals(base) || path.startsWith(base + "/");
+        return path.equals(base)
+                || path.startsWith(base + "/")
+                || path.startsWith(base + ".");
     }
 }

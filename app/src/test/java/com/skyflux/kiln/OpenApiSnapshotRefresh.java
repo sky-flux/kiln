@@ -17,7 +17,7 @@ import java.nio.file.Path;
 
 /**
  * Boots the full application (with {@link TestcontainersConfiguration}'s
- * Postgres + Redis containers), fetches {@code /v3/api-docs}, pretty-prints
+ * Postgres + Redis containers), fetches {@code /docs.json}, pretty-prints
  * the JSON, and writes it to {@code docs/openapi-snapshot.json}.
  *
  * <p>Kept out of the main test suite because it mutates a tracked file.
@@ -63,13 +63,13 @@ public final class OpenApiSnapshotRefresh {
 
             HttpResponse<String> resp = HttpClient.newHttpClient().send(
                     HttpRequest.newBuilder(
-                                    URI.create("http://localhost:" + port + "/v3/api-docs"))
+                                    URI.create("http://localhost:" + port + "/docs.json"))
                             .GET().build(),
                     HttpResponse.BodyHandlers.ofString());
 
             if (resp.statusCode() != 200) {
                 throw new IllegalStateException(
-                        "Failed to fetch /v3/api-docs: HTTP " + resp.statusCode()
+                        "Failed to fetch /docs.json: HTTP " + resp.statusCode()
                                 + " — body: " + resp.body());
             }
 
@@ -104,7 +104,7 @@ public final class OpenApiSnapshotRefresh {
             return om.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (Exception e) {
             throw new IllegalStateException(
-                    "Failed to pretty-print /v3/api-docs response — refusing to overwrite snapshot."
+                    "Failed to pretty-print /docs.json response — refusing to overwrite snapshot."
                             + " Root cause: " + e.getMessage()
                             + ". First 200 chars of body: "
                             + (json == null ? "<null>" : json.substring(0, Math.min(200, json.length()))),
