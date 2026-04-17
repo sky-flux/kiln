@@ -8,7 +8,12 @@ build/
 *.iml
 *.iws
 .vscode/
-out/
+# IntelliJ output dirs — anchored per-module, NOT bare `out/`
+# (bare pattern accidentally matched `adapter/out/` Hexagonal sub-package).
+app/out/
+common/out/
+infra/out/
+user/out/
 
 # jOOQ generated
 infra/build/generated-src/jooq/
@@ -27,3 +32,4 @@ application-local.properties
 
 # Docker
 /data/
+.env
