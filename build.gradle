@@ -42,6 +42,11 @@ subprojects {
     test {
         useJUnitPlatform()
         jvmArgs '-XX:+EnableDynamicAgentLoading'
+        // Testcontainers Ryuk (cleanup sidecar) is flaky on Colima / rootless Docker.
+        // See CLAUDE.md traps — keeps `:app:test` deterministic regardless of the
+        // developer's `~/.testcontainers.properties`. Orphans are cleaned manually:
+        //   docker ps -a | grep testcontainers | awk '{print $1}' | xargs docker rm -f
+        environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
     }
 
     // JUnit Platform alignment — centralised so Phase 5 new modules don't
@@ -54,12 +59,30 @@ subprojects {
     // `OutputDirectoryCreator not available`. Force every platform artifact
     // to 6.0.3 in the test classpaths (and in `pitest` where the config exists).
     configurations.configureEach {
+        // JUnit Platform override is INTENTIONALLY scoped to the test + pitest
+        // configurations only. The override forces 6.0.3 to match Spring Boot
+        // 4's BOM; applying it to runtimeClasspath would pull a test-time-only
+        // coordinate onto production classpaths. Any new configuration that
+        // runs tests (e.g. integrationTest) needs to be added to this list.
         if (name in ['testRuntimeClasspath', 'testCompileClasspath', 'pitest']) {
             resolutionStrategy.eachDependency { details ->
                 if (details.requested.group == 'org.junit.platform') {
                     details.useVersion('6.0.3')
                     details.because('align JUnit Platform with Spring Boot 4 BOM (Phase 4.1 trap I5)')
                 }
+            }
+        }
+        // jOOQ override applies UNIVERSALLY — codegen, runtime, and tests must
+        // all agree on 3.20.0 because the generated foreign-key code emits
+        // `org.jooq.impl.QOM.ForeignKeyRule` (3.20+ API). Scoping this to
+        // testRuntimeClasspath would let `implementation` classpaths downgrade
+        // back to the BOM's 3.19.31 and crash Keys.<clinit> at app startup.
+        // Phase 4.2 trap — see CLAUDE.md for the full symptom description.
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'org.jooq'
+                    && details.requested.name in ['jooq', 'jooq-meta', 'jooq-codegen', 'jooq-meta-extensions']) {
+                details.useVersion('3.20.0')
+                details.because('align jOOQ runtime with codegen 3.20.0 (Phase 4.2 trap: BOM downgrade breaks V4 foreign keys)')
             }
         }
     }

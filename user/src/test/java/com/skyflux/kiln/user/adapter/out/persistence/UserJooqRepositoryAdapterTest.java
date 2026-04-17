@@ -23,15 +23,17 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
  *
  * <p>Uses a real PostgreSQL container via Testcontainers + {@code @ServiceConnection}
  * so Flyway migrations run against the same image/version used in production
- * (postgres:18-alpine) and the jOOQ adapter exercises genuine SQL.
+ * (postgres:18.3-alpine) and the jOOQ adapter exercises genuine SQL.
  */
 @SpringBootTest(classes = UserJooqRepositoryAdapterTest.TestApp.class)
 class UserJooqRepositoryAdapterTest {
 
     private static final String HASH = "$argon2id$v=19$test";
 
-    /** PostgreSQL image used by all Phase 3 integration tests — single source of truth. */
-    static final String POSTGRES_IMAGE = "postgres:18-alpine";
+    /**
+     * PostgreSQL image used by all Phase 3 integration tests — single source of truth.
+     */
+    static final String POSTGRES_IMAGE = "postgres:18.3-alpine";
 
     /**
      * Minimal Spring Boot entry point so {@code @SpringBootTest} can find a
@@ -137,7 +139,11 @@ class UserJooqRepositoryAdapterTest {
                 .fetchOne(Tables.USERS.CREATED_AT);
 
         // Small delay so a re-set of created_at would produce a different value
-        try { Thread.sleep(10); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
         User updated = User.reconstitute(first.id(), "CreateTime2", "createtime@example.com", HASH);
         repo.save(updated);
@@ -187,6 +193,19 @@ class UserJooqRepositoryAdapterTest {
     void findByEmailNullRejected() {
         assertThatNullPointerException()
                 .isThrownBy(() -> repo.findByEmail(null));
+    }
+
+    // ──────────── Phase 4.2: countAll (admin demo surface) ────────────
+
+    @Test
+    void countAllReturnsInsertedRowCount() {
+        // Spring's test-context cache shares one PG container across all tests
+        // in this class, so we measure the DELTA around our own inserts rather
+        // than an absolute starting value.
+        long before = repo.countAll();
+        repo.save(User.register("CountA", "count-a@example.com", HASH));
+        repo.save(User.register("CountB", "count-b@example.com", HASH));
+        assertThat(repo.countAll()).isEqualTo(before + 2);
     }
 
     @org.springframework.beans.factory.annotation.Autowired

@@ -50,6 +50,12 @@ class UserJooqRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public long countAll() {
+        Long n = dsl.selectCount().from(Tables.USERS).fetchOne(0, Long.class);
+        return n == null ? 0L : n;
+    }
+
+    @Override
     public void save(User user) {
         Objects.requireNonNull(user, "user");
         UsersRecord r = mapper.toRecord(user);

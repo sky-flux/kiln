@@ -1,5 +1,8 @@
 package com.skyflux.kiln;
 
+import com.skyflux.kiln.auth.api.RoleAssignmentService;
+import com.skyflux.kiln.auth.domain.PermissionLookupService;
+import com.skyflux.kiln.auth.domain.RoleCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
@@ -36,6 +39,12 @@ class KilnIntegrationTest {
 
     @Autowired
     RestTestClient client;
+
+    @Autowired
+    RoleAssignmentService roleAssignment;
+
+    @Autowired
+    PermissionLookupService permissionLookup;
 
     // ──────────── Phase 2 / 3 — infra bypass & error mapping ────────────
 
@@ -249,7 +258,118 @@ class KilnIntegrationTest {
                 .jsonPath("$.code").isEqualTo(1001);   // AppCode.UNAUTHORIZED
     }
 
+    // ──────────── Phase 4.2 — RBAC: @SaCheckRole("ADMIN") on AdminController ────────────
+
+    @Test
+    void registrationAssignsUserRoleViaEventListener() {
+        // C1 guard: UserRegisteredListener (sync AFTER_COMMIT via @TransactionalEventListener)
+        // must write the USER row to user_roles for every freshly registered user. Without this
+        // assertion, a subtle regression (e.g. someone re-adds @Async without @EnableAsync, or
+        // the listener throws silently) would degrade permissions but pass the slice / e2e
+        // positive-path tests. We assert the lookup SERVICE returns "USER" — which exercises
+        // both the INSERT and the jOOQ read path used by StpInterfaceImpl.
+        String email = "rbac-roles-visible@example.com";
+        String userId = register("RbacRolesVisible", email, "S3cret-pw");
+
+        java.util.List<String> roles = permissionLookup.rolesFor(UUID.fromString(userId));
+
+        org.assertj.core.api.Assertions.assertThat(roles).containsExactly("USER");
+    }
+
+    @Test
+    void freshlyRegisteredUserIsForbiddenFromAdminEndpoint() {
+        // UserRegisteredListener auto-assigns the USER role AFTER_COMMIT of
+        // registration. USER does NOT carry "ADMIN" → @SaCheckRole rejects with
+        // NotRoleException → GlobalExceptionHandler maps to 403 / AppCode.FORBIDDEN.
+        String email = "rbac-user-only@example.com";
+        String token = registerAndLogin("RbacUser", email, "S3cret-pw");
+
+        client.get().uri("/api/v1/admin/users/count")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1002);   // AppCode.FORBIDDEN
+    }
+
+    @Test
+    void adminRoleGrantsAccessToAdminEndpoint() {
+        // Register an ADMIN, capture the count, register two more regular users,
+        // then re-read the count and assert it grew by EXACTLY +2. A "greater than
+        // zero" check here would silently pass if Sa-Token's AOP degraded and
+        // anyone could hit the endpoint — the delta equality forces the assertion
+        // to travel through the full chain: role_permissions seed →
+        // UserRoleJooqRepository.assign → StpInterfaceImpl → @SaCheckRole("ADMIN")
+        // pass → CountUsersUseCase → AdminController body → R-wrap.
+        String email = "rbac-admin@example.com";
+        String userId = register("RbacAdmin", email, "S3cret-pw");
+        roleAssignment.assign(UUID.fromString(userId), RoleCode.ADMIN);
+        String token = login(email, "S3cret-pw");
+
+        long baseline = readAdminCount(token);
+        register("RbacDelta1", "rbac-delta-1@example.com", "S3cret-pw");
+        register("RbacDelta2", "rbac-delta-2@example.com", "S3cret-pw");
+
+        long after = readAdminCount(token);
+        org.assertj.core.api.Assertions.assertThat(after - baseline).isEqualTo(2L);
+    }
+
+    private long readAdminCount(String token) {
+        String resp = client.get().uri("/api/v1/admin/users/count")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult().getResponseBody();
+        Matcher m = Pattern.compile("\"count\"\\s*:\\s*(\\d+)").matcher(resp);
+        if (!m.find()) {
+            throw new AssertionError("count not found in admin response: " + resp);
+        }
+        return Long.parseLong(m.group(1));
+    }
+
+    @Test
+    void adminEndpointWithoutTokenReturns401() {
+        // NotLoginException comes BEFORE NotRoleException because Sa-Token's
+        // interceptor short-circuits on an absent token. Confirms the @SaCheckRole
+        // gate does not accidentally leak admin-endpoint existence to anonymous callers.
+        client.get().uri("/api/v1/admin/users/count")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1001);   // AppCode.UNAUTHORIZED
+    }
+
     // ──────────── helpers ────────────
+
+    private String register(String name, String email, String password) {
+        String resp = client.post().uri("/api/v1/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"name":"%s","email":"%s","password":"%s"}
+                        """.formatted(name, email, password))
+                .exchange().expectStatus().isCreated()
+                .expectBody(String.class)
+                .returnResult().getResponseBody();
+        return extractJsonString(resp, "id");
+    }
+
+    private String login(String email, String password) {
+        String resp = client.post().uri("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"email":"%s","password":"%s"}
+                        """.formatted(email, password))
+                .exchange().expectStatus().isOk()
+                .expectBody(String.class)
+                .returnResult().getResponseBody();
+        return extractJsonString(resp, "token");
+    }
+
+    private String registerAndLogin(String name, String email, String password) {
+        register(name, email, password);
+        return login(email, password);
+    }
 
     /**
      * Crude JSON string extractor for {@code "<key>":"<value>"} patterns — the

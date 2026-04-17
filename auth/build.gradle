@@ -1,0 +1,36 @@
+dependencies {
+    // Common shared types (AppException, PasswordService interface, etc.)
+    implementation project(':common')
+    // Infra for jOOQ runtime + generated tables (ROLES, PERMISSIONS, …),
+    // Sa-Token StpInterface, Spring Modulith core, web starter.
+    implementation project(':infra')
+    // User for the UserRegistered domain event — consumed by UserRegisteredListener
+    // to auto-assign the default USER role on registration (Modulith event pattern).
+    implementation project(':user')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.modulith:spring-modulith-starter-core'
+    // NOTE: `spring-modulith-events-api` was previously required for
+    // `@ApplicationModuleListener`. Phase 4.2 Gate 3 C1: UserRegisteredListener
+    // now uses plain Spring `@TransactionalEventListener` instead, so the api
+    // artefact is no longer a compile-time dep. Re-add it (plus
+    // `spring-modulith-events-jdbc` for the Event Publication Registry) if the
+    // module graduates to async + retry semantics.
+}
+
+// JaCoCo coverage — auth is a Supporting subdomain with simpler layout,
+// thresholds mirror infra (line 80 / branch 65) until baseline is measured.
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                minimum = 0.70
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification

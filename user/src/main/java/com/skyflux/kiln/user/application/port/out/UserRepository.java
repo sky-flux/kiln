@@ -18,4 +18,11 @@ public interface UserRepository {
     Optional<User> findByEmail(String email);
 
     void save(User user);
+
+    /**
+     * Total number of users persisted. Phase 4.2 introduced this for the
+     * {@code AdminController} demo surface; later phases may expose it via
+     * dedicated read models if query load grows.
+     */
+    long countAll();
 }

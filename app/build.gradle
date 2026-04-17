@@ -6,6 +6,7 @@ dependencies {
     implementation project(':common')
     implementation project(':infra')
     implementation project(':user')
+    implementation project(':auth')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -59,7 +60,8 @@ tasks.register('updateOpenApiSnapshot', JavaExec) {
     description = 'Refreshes docs/openapi-snapshot.json from the live OpenAPI endpoint.'
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.skyflux.kiln.OpenApiSnapshotRefresh'
-    systemProperty 'testcontainers.ryuk.disabled', 'true'
+    // Colima flake — mirrors the `test.environment` block in root build.gradle.
+    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
 }
 
 // JaCoCo coverage verification.

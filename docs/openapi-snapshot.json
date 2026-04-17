@@ -106,6 +106,24 @@
           }
         }
       }
+    },
+    "/api/v1/admin/users/count" : {
+      "get" : {
+        "tags" : [ "admin-controller" ],
+        "operationId" : "userCount",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UserCountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -172,6 +190,15 @@
           },
           "email" : {
             "type" : "string"
+          }
+        }
+      },
+      "UserCountResponse" : {
+        "type" : "object",
+        "properties" : {
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       }

@@ -32,6 +32,10 @@ class ArchitectureTest {
     static final ArchRule domain_must_not_depend_on_frameworks =
             noClasses()
                     .that().resideInAPackage("..domain..")
+                    // package-info carries metadata only (e.g. Spring Modulith
+                    // @NamedInterface on domain.event); it holds no behaviour
+                    // and so does not "pollute" domain code with runtime coupling.
+                    .and().doNotHaveSimpleName("package-info")
                     .should().dependOnClassesThat()
                     .resideInAnyPackage(
                             "org.springframework..",
@@ -132,7 +136,23 @@ class ArchitectureTest {
                     .and().doNotHaveSimpleName("package-info")
                     .should(beSealedInterfaceOrRecord());
 
-    // ─── Rule 10: persistence adapters must be package-private (only the port is public API) ────
+    // ── Rule 10.1: inbound web adapters must NOT reach outbound ports (hexagonal) ────────────
+
+    /**
+     * Phase 4.2 Gate 3 I3 — the admin endpoint originally wired directly into
+     * {@code UserRepository} (an outbound port). That's a layering shortcut
+     * the Hexagonal diagram forbids: inbound adapters talk to inbound use-case
+     * ports only, and the outbound port is reached through the service layer.
+     * Pinning the rule here prevents regressions as new admin endpoints land.
+     */
+    @ArchTest
+    static final ArchRule inbound_adapters_must_not_use_outbound_ports =
+            noClasses()
+                    .that().resideInAPackage("..adapter.in..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("..application.port.out..");
+
+    // ─── Rule 11: persistence adapters must be package-private (only the port is public API) ────
 
     @ArchTest
     static final ArchRule persistence_adapters_should_be_package_private =

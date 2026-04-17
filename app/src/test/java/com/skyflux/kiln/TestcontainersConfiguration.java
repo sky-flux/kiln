@@ -21,11 +21,15 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
-    /** Single source of truth for the PostgreSQL image in integration tests. */
-    public static final String POSTGRES_IMAGE = "postgres:18-alpine";
+    /**
+     * Single source of truth for the PostgreSQL image in integration tests.
+     */
+    public static final String POSTGRES_IMAGE = "postgres:18.3-alpine";
 
-    /** Single source of truth for the Redis image in integration tests. */
-    public static final String REDIS_IMAGE = "redis:8-alpine";
+    /**
+     * Single source of truth for the Redis image in integration tests.
+     */
+    public static final String REDIS_IMAGE = "redis:8.6.2-alpine";
 
     @Bean
     @ServiceConnection

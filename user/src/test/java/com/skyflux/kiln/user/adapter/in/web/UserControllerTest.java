@@ -1,6 +1,7 @@
 package com.skyflux.kiln.user.adapter.in.web;
 
 import com.skyflux.kiln.user.application.port.in.AuthenticateUserUseCase;
+import com.skyflux.kiln.user.application.port.in.CountUsersUseCase;
 import com.skyflux.kiln.user.application.port.in.GetUserUseCase;
 import com.skyflux.kiln.user.application.port.in.RegisterUserUseCase;
 import com.skyflux.kiln.user.domain.model.UserId;
@@ -65,6 +66,14 @@ class UserControllerTest {
      */
     @MockitoBean
     AuthenticateUserUseCase authenticateUseCase;
+
+    /**
+     * Phase 4.2: {@code AdminController} lives in the same package and is
+     * auto-scanned. It constructor-injects {@link CountUsersUseCase}; supply a
+     * mock so the slice context loads.
+     */
+    @MockitoBean
+    CountUsersUseCase countUsers;
 
     @Autowired
     MockMvc mvc;

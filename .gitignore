@@ -11,6 +11,7 @@ build/
 # IntelliJ output dirs — anchored per-module, NOT bare `out/`
 # (bare pattern accidentally matched `adapter/out/` Hexagonal sub-package).
 app/out/
+auth/out/
 common/out/
 infra/out/
 user/out/

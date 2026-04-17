@@ -2,6 +2,7 @@ package com.skyflux.kiln.user.adapter.in.web;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.skyflux.kiln.user.application.port.in.AuthenticateUserUseCase;
+import com.skyflux.kiln.user.application.port.in.CountUsersUseCase;
 import com.skyflux.kiln.user.application.port.in.GetUserUseCase;
 import com.skyflux.kiln.user.application.port.in.RegisterUserUseCase;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,14 @@ class AuthControllerTest {
     GetUserUseCase getUserUseCase;
     @MockitoBean
     RegisterUserUseCase registerUseCase;
+
+    /**
+     * Phase 4.2: {@code AdminController} lives in the same package and is
+     * auto-scanned. It constructor-injects {@link CountUsersUseCase}; supply a
+     * mock so the slice context loads.
+     */
+    @MockitoBean
+    CountUsersUseCase countUsers;
 
     @Autowired
     MockMvc mvc;
