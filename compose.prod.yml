@@ -26,7 +26,7 @@ services:
     ports:
       - "${APP_PORT:-8080}:8080"
     restart: unless-stopped
-    # No healthcheck here: Paketo tiny run image (default bootBuildImage output)
+    # No health check here: Paketo tiny run image (default bootBuildImage output)
     # has no curl/wget. If you need one, switch the builder to paketobuildpacks/builder-jammy-base
     # in build.gradle and add: test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
     deploy:
@@ -35,14 +35,14 @@ services:
           memory: 1g
 
   postgres:
-    ports: []   # suppress base host-publish; prod keeps DB internal to compose network
+    ports: [ ]   # suppress base host-publish; prod keeps DB internal to compose network
     deploy:
       resources:
         limits:
           memory: 512m
 
   redis:
-    ports: []   # suppress base host-publish; prod keeps Redis internal to compose network
+    ports: [ ]   # suppress base host-publish; prod keeps Redis internal to compose network
     deploy:
       resources:
         limits:
