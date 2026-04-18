@@ -110,6 +110,8 @@ class KilnIntegrationTest {
 
     @Test
     void postBlankNameReturns400WithValidationCode() {
+        // Bean Validation fires before the use case; TenantContext is never read.
+        // No X-Tenant-Code needed — the 400 is produced before tenant resolution.
         client.post().uri("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
@@ -129,6 +131,7 @@ class KilnIntegrationTest {
                 {"name":"Dup1","email":"dup-e2e@example.com","password":"pw-one-1111"}
                 """;
         client.post().uri("/api/v1/users")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body1)
                 .exchange()
@@ -138,6 +141,7 @@ class KilnIntegrationTest {
                 {"name":"Dup2","email":"DUP-e2e@Example.com","password":"pw-two-2222"}
                 """;
         client.post().uri("/api/v1/users")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body2)
                 .exchange()
@@ -153,11 +157,12 @@ class KilnIntegrationTest {
         String email = "auth-e2e@example.com";
         String password = "S3cret-pass";
 
-        // 1. Register
+        // 1. Register in the system tenant
         String registerBody = """
                 {"name":"AuthE2E","email":"%s","password":"%s"}
                 """.formatted(email, password);
         String registerResp = client.post().uri("/api/v1/users")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON).body(registerBody)
                 .exchange()
                 .expectStatus().isCreated()
@@ -170,6 +175,7 @@ class KilnIntegrationTest {
                 {"email":"%s","password":"%s"}
                 """.formatted(email, password);
         String loginResp = client.post().uri("/api/v1/auth/login")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON).body(loginBody)
                 .exchange()
                 .expectStatus().isOk()
@@ -178,7 +184,7 @@ class KilnIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(loginResp).contains("\"code\":0", "\"token\"");
         String token = extractJsonString(loginResp, "token");
 
-        // 3. Authenticated GET — requires Sa-Token bearer
+        // 3. Authenticated GET — token carries tenantId; no header needed
         client.get().uri("/api/v1/users/{id}", userId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .exchange()
@@ -202,8 +208,9 @@ class KilnIntegrationTest {
 
     @Test
     void loginWithWrongPasswordReturns401WithLoginFailedCode() {
-        // Seed a user.
+        // Seed a user in the system tenant.
         client.post().uri("/api/v1/users")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON).body("""
                         {"name":"WrongPw","email":"wrong-pw@example.com","password":"correct-pw"}
                         """)
@@ -211,6 +218,7 @@ class KilnIntegrationTest {
 
         // Login with wrong password.
         client.post().uri("/api/v1/auth/login")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON).body("""
                         {"email":"wrong-pw@example.com","password":"INCORRECT"}
                         """)
@@ -241,8 +249,9 @@ class KilnIntegrationTest {
         String email = "logout-e2e@example.com";
         String password = "S3cret-pass";
 
-        // Register + login
+        // Register + login in the system tenant
         String registerResp = client.post().uri("/api/v1/users")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
                         {"name":"LogoutE2E","email":"%s","password":"%s"}
@@ -253,6 +262,7 @@ class KilnIntegrationTest {
         String userId = extractJsonString(registerResp, "id");
 
         String loginResp = client.post().uri("/api/v1/auth/login")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
                         {"email":"%s","password":"%s"}
@@ -396,6 +406,7 @@ class KilnIntegrationTest {
 
         for (int i = 0; i < 3; i++) {
             client.post().uri("/api/v1/auth/login")
+                    .header("X-Tenant-Code", "system")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body("""
                             {"email":"%s","password":"WRONG-pass-%d"}
@@ -408,6 +419,7 @@ class KilnIntegrationTest {
 
         // 4th attempt — correct password, but the account is locked.
         client.post().uri("/api/v1/auth/login")
+                .header("X-Tenant-Code", "system")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
                         {"email":"%s","password":"%s"}
@@ -551,10 +563,80 @@ class KilnIntegrationTest {
                 .doesNotContain("\"LOGIN_FAILED\"");
     }
 
+    // ──────────── Wave 1 — RLS tenant-isolation ────────────
+
+    @Test
+    void rlsIsolatesUserAcrossTenants() {
+        // Setup: promote a system-tenant admin (in-process, no HTTP bootstrap needed)
+        String adminEmail = "rls-admin@example.com";
+        String adminId = register("RlsAdmin", adminEmail, "S3cret-pass");
+        roleAssignment.assign(UUID.fromString(adminId), RoleCode.ADMIN);
+        String adminToken = login(adminEmail, "S3cret-pass");
+
+        // 1. Create two tenants via the admin endpoint (authenticated as system-tenant admin)
+        String alphaCode = "alpha-tenant";
+        String betaCode  = "beta-tenant";
+        client.post().uri("/api/v1/admin/tenants")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"code":"%s","name":"Alpha Tenant"}
+                        """.formatted(alphaCode))
+                .exchange()
+                .expectStatus().isCreated();
+        client.post().uri("/api/v1/admin/tenants")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""
+                        {"code":"%s","name":"Beta Tenant"}
+                        """.formatted(betaCode))
+                .exchange()
+                .expectStatus().isCreated();
+
+        // 2. Register a user in each tenant
+        String userAId = registerInTenant("UserAlpha", "user-alpha@example.com", "S3cret-pass", alphaCode);
+        String userBId = registerInTenant("UserBeta",  "user-beta@example.com",  "S3cret-pass", betaCode);
+
+        // 3. Login as each user (session carries tenantId as Sa-Token extra)
+        String tokenA = loginInTenant("user-alpha@example.com", "S3cret-pass", alphaCode);
+        String tokenB = loginInTenant("user-beta@example.com",  "S3cret-pass", betaCode);
+
+        // 4. Each user can fetch their own profile
+        client.get().uri("/api/v1/users/{id}", userAId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data.id").isEqualTo(userAId);
+
+        client.get().uri("/api/v1/users/{id}", userBId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenB)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data.id").isEqualTo(userBId);
+
+        // 5. RLS cross-tenant isolation: user-a CANNOT see user-b's profile.
+        // PostgreSQL's tenant_isolation policy filters by app.tenant_id, so
+        // userB's row is invisible to the alpha session → repository returns
+        // empty → GetUserService throws NOT_FOUND (404).
+        client.get().uri("/api/v1/users/{id}", userBId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo(1003);   // AppCode.NOT_FOUND
+    }
+
     // ──────────── helpers ────────────
 
     private String register(String name, String email, String password) {
+        return registerInTenant(name, email, password, "system");
+    }
+
+    private String registerInTenant(String name, String email, String password, String tenantCode) {
         String resp = client.post().uri("/api/v1/users")
+                .header("X-Tenant-Code", tenantCode)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
                         {"name":"%s","email":"%s","password":"%s"}
@@ -566,7 +648,12 @@ class KilnIntegrationTest {
     }
 
     private String login(String email, String password) {
+        return loginInTenant(email, password, "system");
+    }
+
+    private String loginInTenant(String email, String password, String tenantCode) {
         String resp = client.post().uri("/api/v1/auth/login")
+                .header("X-Tenant-Code", tenantCode)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("""
                         {"email":"%s","password":"%s"}
