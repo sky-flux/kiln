@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.user.domain.event.LoginEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,12 +20,11 @@ import java.util.UUID;
  * explicit {@code @TransactionalEventListener(AFTER_COMMIT)} +
  * {@code @Transactional(REQUIRES_NEW)} spelling.
  *
- * <p>The {@code reason} tag on {@code LoginFailed} is sourced from the
- * application's own enum-like whitelist ({@code UNKNOWN_EMAIL},
- * {@code WRONG_PASSWORD}, {@code ACCOUNT_LOCKED}), never user input — so the
- * hand-built JSON string is safe from injection. The event carries its own
- * {@code requestId} (populated at publish time from MDC), so listeners do not
- * re-read MDC from their own thread.
+ * <p>LoginSucceeded → resource=USER, action=LOGIN, details={"result":"SUCCESS"}
+ * <p>LoginFailed   → resource=USER, action=LOGIN, details={"result":"FAILED","reason":...}
+ *                    This covers all failure reasons including ACCOUNT_LOCKED, UNKNOWN_EMAIL,
+ *                    and WRONG_PASSWORD — all treated as action=LOGIN since the authentication
+ *                    attempt occurred, regardless of outcome.
  */
 @Component
 class LoginAuditListener {
@@ -40,8 +40,9 @@ class LoginAuditListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     void on(LoginEvent.LoginSucceeded event) {
         UUID userId = event.userId().value();
+        String details = AuditDetailsJson.from(Map.of("result", "SUCCESS"));
         auditService.record(
-                AuditType.LOGIN_SUCCESS, userId, userId, null, event.requestId());
+                AuditResource.USER, AuditAction.LOGIN, userId, userId, details, event.requestId());
     }
 
     // REQUIRES_NEW mandatory per RestrictedTransactionalEventListenerFactory — see UserLifecycleAuditListener.
@@ -52,8 +53,8 @@ class LoginAuditListener {
         // so actor_user_id is always null. target_user_id names the account
         // under attack (null if the email didn't resolve).
         UUID target = event.targetUserId();
-        String details = AuditDetailsJson.from(Map.of("reason", event.reason()));
+        String details = AuditDetailsJson.from(Map.of("result", "FAILED", "reason", event.reason()));
         auditService.record(
-                AuditType.LOGIN_FAILED, null, target, details, event.requestId());
+                AuditResource.USER, AuditAction.LOGIN, null, target, details, event.requestId());
     }
 }

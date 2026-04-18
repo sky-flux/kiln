@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.user.domain.event.UserRegistered;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,9 +24,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * runs, and a {@code REQUIRES_NEW} transaction commits the audit row
  * independently so failures here never unwind the business transaction.
  *
- * <p>The {@code UserRegistered} event does not carry a request id; we pass
- * {@code null} rather than reading MDC, because the listener thread may not
- * share the publisher's MDC scope.
+ * <p>USER_REGISTERED → resource=USER, action=CREATE
  */
 @Component
 class UserLifecycleAuditListener {
@@ -46,6 +45,6 @@ class UserLifecycleAuditListener {
     void on(UserRegistered event) {
         java.util.UUID userId = event.userId().value();
         String details = AuditDetailsJson.from(java.util.Map.of("email", event.email()));
-        auditService.record(AuditType.USER_REGISTERED, userId, userId, details, null);
+        auditService.record(AuditResource.USER, AuditAction.CREATE, userId, userId, details, null);
     }
 }

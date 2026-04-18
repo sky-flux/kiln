@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.auth.domain.event.RoleEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -15,15 +16,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p>See {@link UserLifecycleAuditListener} for the rationale behind the
  * explicit transactional-listener spelling.
  *
- * <p>{@code actor} is {@code null}: the current {@code RoleEvent} shape does
- * not carry the admin who performed the assign/revoke. Recording it honestly
- * as {@code null} today is preferable to guessing from MDC. When Phase 5
- * extends the event with the acting admin id, wire it through here.
- * {@code requestId} is {@code null} for the same reason — {@code RoleEvent}
- * does not carry it, and reading MDC from the listener thread is unsafe.
- *
- * <p>The {@code RoleCode} enum value drives the JSON payload, so it is safe
- * to inline via string concatenation.
+ * <p>ROLE_ASSIGNED → resource=ROLE, action=ASSIGN
+ * <p>ROLE_REVOKED  → resource=ROLE, action=REVOKE
  */
 @Component
 class RoleAuditListener {
@@ -40,7 +34,7 @@ class RoleAuditListener {
     void on(RoleEvent.RoleAssigned event) {
         String details = AuditDetailsJson.from(java.util.Map.of("role", event.role().value()));
         auditService.record(
-                AuditType.ROLE_ASSIGNED, null, event.userId(), details, null);
+                AuditResource.ROLE, AuditAction.ASSIGN, null, event.userId(), details, null);
     }
 
     // REQUIRES_NEW mandatory per RestrictedTransactionalEventListenerFactory — see UserLifecycleAuditListener.
@@ -49,6 +43,6 @@ class RoleAuditListener {
     void on(RoleEvent.RoleRevoked event) {
         String details = AuditDetailsJson.from(java.util.Map.of("role", event.role().value()));
         auditService.record(
-                AuditType.ROLE_REVOKED, null, event.userId(), details, null);
+                AuditResource.ROLE, AuditAction.REVOKE, null, event.userId(), details, null);
     }
 }

@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.domain.Audit;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.audit.repo.AuditRepository;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
@@ -35,29 +36,30 @@ class AuditQueryServiceImplTest {
     void listPassesThroughFiltersAndPage() {
         PageQuery page = new PageQuery(1, 20, null);
         PageResult<Audit> expected = PageResult.of(List.of(sample()), 1L, page);
-        when(repo.list(page, AuditType.LOGIN_SUCCESS, ACTOR, null)).thenReturn(expected);
+        when(repo.list(page, AuditResource.USER, AuditAction.LOGIN, ACTOR, null)).thenReturn(expected);
 
-        PageResult<Audit> actual = service.list(page, AuditType.LOGIN_SUCCESS, ACTOR, null);
+        PageResult<Audit> actual = service.list(page, AuditResource.USER, AuditAction.LOGIN, ACTOR, null);
 
         assertThat(actual).isSameAs(expected);
-        verify(repo).list(page, AuditType.LOGIN_SUCCESS, ACTOR, null);
+        verify(repo).list(page, AuditResource.USER, AuditAction.LOGIN, ACTOR, null);
     }
 
     @Test
     void listForwardsNullFilters() {
         PageQuery page = new PageQuery(1, 20, null);
-        when(repo.list(any(), isNull(), isNull(), isNull())).thenReturn(PageResult.empty(page));
+        when(repo.list(any(), isNull(), isNull(), isNull(), isNull())).thenReturn(PageResult.empty(page));
 
-        service.list(page, null, null, null);
+        service.list(page, null, null, null, null);
 
-        verify(repo).list(eq(page), isNull(), isNull(), isNull());
+        verify(repo).list(eq(page), isNull(), isNull(), isNull(), isNull());
     }
 
     private static Audit sample() {
         return new Audit(
                 UUID.randomUUID(),
                 Instant.parse("2026-04-18T09:00:00Z"),
-                AuditType.LOGIN_SUCCESS,
+                AuditResource.USER,
+                AuditAction.LOGIN,
                 ACTOR,
                 null,
                 null,

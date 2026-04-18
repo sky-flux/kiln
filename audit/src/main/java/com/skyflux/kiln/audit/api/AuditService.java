@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.api;
 
 import com.skyflux.kiln.audit.domain.Audit;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 
 import java.util.UUID;
 
@@ -12,15 +13,15 @@ import java.util.UUID;
  *
  * <p>Contract: {@code record} runs in a {@code REQUIRES_NEW} transaction so a
  * rollback in the caller's transaction does NOT erase the audit row. The audit
- * trail must survive business-logic failures — that's half the reason it
- * exists.
+ * trail must survive business-logic failures — that's half the reason it exists.
  */
 public interface AuditService {
 
     /**
      * Persist a new audit event.
      *
-     * @param type         event category (required)
+     * @param resource     entity being acted upon (required)
+     * @param action       operation performed (required)
      * @param actorUserId  who performed the action, nullable for pre-auth / system events
      * @param targetUserId whom the action targeted, nullable if target == actor
      * @param details      free-form JSON payload, nullable
@@ -28,7 +29,8 @@ public interface AuditService {
      * @return the persisted event, including the newly-generated {@code id}
      *         and {@code occurredAt}
      */
-    Audit record(AuditType type,
+    Audit record(AuditResource resource,
+                 AuditAction action,
                  UUID actorUserId,
                  UUID targetUserId,
                  String details,

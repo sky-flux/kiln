@@ -8,34 +8,31 @@ import java.util.UUID;
 /**
  * Immutable record of a single audit-log row.
  *
- * <p>Mirrors a row of the {@code audits} table (V13 Flyway migration).
- * Kept in the {@code domain} package — zero framework imports — so Wave 2's
- * listener can assemble events from cross-module domain events before
- * handing them to the repository.
+ * <p>Mirrors a row of the {@code audits} table (V14 Flyway migration).
+ * Kept in the {@code domain} package — zero framework imports — so listeners
+ * can assemble events from cross-module domain events before handing them to
+ * the repository.
  *
  * <p>Nullable fields reflect real-world event shapes:
  * <ul>
- *   <li>{@code actorUserId} — null for pre-auth events (e.g. {@link
- *       AuditType#LOGIN_FAILED} with an unknown username) or
- *       system-originated actions.</li>
- *   <li>{@code targetUserId} — null for events with no distinct target
- *       (e.g. {@link AuditType#LOGIN_SUCCESS}, target == actor by
- *       convention).</li>
- *   <li>{@code details} — optional JSON payload for structured metadata
- *       (e.g. failed-login reason, assigned role code). Null when no extra
- *       context is available.</li>
+ *   <li>{@code actorUserId} — null for pre-auth events (e.g. login failures
+ *       with an unknown username) or system-originated actions.</li>
+ *   <li>{@code targetUserId} — null for events with no distinct target.</li>
+ *   <li>{@code details} — optional JSON payload for structured metadata.
+ *       Null when no extra context is available.</li>
  *   <li>{@code requestId} — optional MDC {@code X-Request-Id} correlation
  *       key. Null for events produced outside an HTTP request (async jobs).</li>
  * </ul>
  *
- * <p>{@code id}, {@code occurredAt}, and {@code type} are mandatory: a row
- * with no primary key, no timestamp, or no type tag is not recoverable as an
- * audit record.
+ * <p>{@code id}, {@code occurredAt}, {@code resource}, and {@code action} are
+ * mandatory: a row with no primary key, no timestamp, or no resource/action tag
+ * is not recoverable as an audit record.
  */
 public record Audit(
         UUID id,
         Instant occurredAt,
-        AuditType type,
+        AuditResource resource,
+        AuditAction action,
         UUID actorUserId,
         UUID targetUserId,
         String details,
@@ -45,17 +42,19 @@ public record Audit(
     public Audit {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(occurredAt, "occurredAt");
-        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(resource, "resource");
+        Objects.requireNonNull(action, "action");
     }
 
     /**
      * Factory that generates a fresh {@link UUID} and stamps {@code occurredAt}
      * from the supplied {@link Clock}. The clock is injected rather than using
-     * {@link Instant#now()} so tests and deterministic replay (e.g. Flowable
-     * workflow audit playback) can control event timestamps exactly.
+     * {@link Instant#now()} so tests and deterministic replay can control event
+     * timestamps exactly.
      *
      * @param clock        time source; {@code Clock.systemUTC()} in production wiring
-     * @param type         event category (required)
+     * @param resource     entity being acted upon (required)
+     * @param action       operation performed (required)
      * @param actorUserId  who performed the action, nullable
      * @param targetUserId whom the action targeted, nullable
      * @param details      free-form JSON payload, nullable
@@ -65,7 +64,8 @@ public record Audit(
      */
     public static Audit create(
             Clock clock,
-            AuditType type,
+            AuditResource resource,
+            AuditAction action,
             UUID actorUserId,
             UUID targetUserId,
             String details,
@@ -74,7 +74,8 @@ public record Audit(
         return new Audit(
                 UUID.randomUUID(),
                 clock.instant(),
-                type,
+                resource,
+                action,
                 actorUserId,
                 targetUserId,
                 details,

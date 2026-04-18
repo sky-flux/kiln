@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.domain.Audit;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.audit.repo.AuditRepository;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
@@ -25,15 +26,14 @@ import java.util.UUID;
  *
  * <p>Column-mapping notes:
  * <ul>
- *   <li>{@code type} — stored as the enum's {@code name()}. Keeps historical
- *       rows readable even if the Java package moves.</li>
+ *   <li>{@code resource} / {@code action} — stored as the enum's {@code name()}.
+ *       Keeps historical rows readable even if the Java package moves.</li>
  *   <li>{@code occurred_at} — codegen picked {@code OffsetDateTime} for
  *       {@code TIMESTAMPTZ}. We round-trip through UTC
  *       ({@code Instant.atOffset(UTC)} on write, {@code .toInstant()} on read).</li>
  *   <li>{@code details} — jOOQ 3.20 maps PG {@code JSONB} to {@link JSON}
  *       (not JSONB), so we pass through raw text with {@link JSON#valueOf(String)}
- *       on write and {@link JSON#data()} on read. PG JSONB normalises whitespace
- *       and key order — tests assert on content, not byte-identity.</li>
+ *       on write and {@link JSON#data()} on read.</li>
  * </ul>
  */
 @Repository
@@ -51,7 +51,8 @@ class AuditJooqRepositoryImpl implements AuditRepository {
         dsl.insertInto(Tables.AUDITS)
                 .set(Tables.AUDITS.ID, audit.id())
                 .set(Tables.AUDITS.OCCURRED_AT, audit.occurredAt().atOffset(ZoneOffset.UTC))
-                .set(Tables.AUDITS.TYPE, audit.type().name())
+                .set(Tables.AUDITS.RESOURCE, audit.resource().name())
+                .set(Tables.AUDITS.ACTION, audit.action().name())
                 .set(Tables.AUDITS.ACTOR_USER_ID, audit.actorUserId())
                 .set(Tables.AUDITS.TARGET_USER_ID, audit.targetUserId())
                 .set(Tables.AUDITS.DETAILS, audit.details() == null ? null : JSON.valueOf(audit.details()))
@@ -60,9 +61,10 @@ class AuditJooqRepositoryImpl implements AuditRepository {
     }
 
     @Override
-    public PageResult<Audit> list(PageQuery page, AuditType type, UUID actorUserId, UUID targetUserId) {
+    public PageResult<Audit> list(PageQuery page, AuditResource resource, AuditAction action,
+                                  UUID actorUserId, UUID targetUserId) {
         Objects.requireNonNull(page, "page");
-        Condition where = buildWhere(type, actorUserId, targetUserId);
+        Condition where = buildWhere(resource, action, actorUserId, targetUserId);
 
         List<AuditsRecord> rows = dsl.selectFrom(Tables.AUDITS)
                 .where(where)
@@ -75,18 +77,22 @@ class AuditJooqRepositoryImpl implements AuditRepository {
         for (AuditsRecord r : rows) {
             items.add(toDomain(r));
         }
-        return PageResult.of(items, count(type, actorUserId, targetUserId), page);
+        return PageResult.of(items, count(resource, action, actorUserId, targetUserId), page);
     }
 
     @Override
-    public long count(AuditType type, UUID actorUserId, UUID targetUserId) {
-        return dsl.fetchCount(Tables.AUDITS, buildWhere(type, actorUserId, targetUserId));
+    public long count(AuditResource resource, AuditAction action, UUID actorUserId, UUID targetUserId) {
+        return dsl.fetchCount(Tables.AUDITS, buildWhere(resource, action, actorUserId, targetUserId));
     }
 
-    private static Condition buildWhere(AuditType type, UUID actorUserId, UUID targetUserId) {
+    private static Condition buildWhere(AuditResource resource, AuditAction action,
+                                        UUID actorUserId, UUID targetUserId) {
         Condition where = DSL.noCondition();
-        if (type != null) {
-            where = where.and(Tables.AUDITS.TYPE.eq(type.name()));
+        if (resource != null) {
+            where = where.and(Tables.AUDITS.RESOURCE.eq(resource.name()));
+        }
+        if (action != null) {
+            where = where.and(Tables.AUDITS.ACTION.eq(action.name()));
         }
         if (actorUserId != null) {
             where = where.and(Tables.AUDITS.ACTOR_USER_ID.eq(actorUserId));
@@ -103,7 +109,8 @@ class AuditJooqRepositoryImpl implements AuditRepository {
         return new Audit(
                 r.getId(),
                 occurred.toInstant(),
-                AuditType.valueOf(r.getType()),
+                AuditResource.valueOf(r.getResource()),
+                AuditAction.valueOf(r.getAction()),
                 r.getActorUserId(),
                 r.getTargetUserId(),
                 details == null ? null : details.data(),

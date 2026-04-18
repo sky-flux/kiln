@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.user.domain.event.UserRegistered;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -31,18 +34,17 @@ class UserLifecycleAuditListenerTest {
     private UserLifecycleAuditListener listener;
 
     @Test
-    void userRegisteredRecordsUserRegisteredWithActorAndTargetAsSameUserId() {
+    void userRegisteredRecordsUserCreateWithActorAndTargetAsSameUserId() {
         UUID userId = UUID.randomUUID();
         UserRegistered event = new UserRegistered(
-                new UserId(userId), java.util.UUID.randomUUID(), "alice@example.com", Instant.parse("2026-04-18T10:00:00Z"));
+                new UserId(userId), UUID.randomUUID(), "alice@example.com", Instant.parse("2026-04-18T10:00:00Z"));
 
         listener.on(event);
 
         verify(auditService).record(
-                argThat(t -> t == AuditType.USER_REGISTERED),
-                argThat(actor -> userId.equals(actor)),
-                argThat(target -> userId.equals(target)),
+                eq(AuditResource.USER), eq(AuditAction.CREATE),
+                eq(userId), eq(userId),
                 argThat(details -> details != null && details.contains("email")),
-                argThat(reqId -> reqId == null));
+                isNull());
     }
 }

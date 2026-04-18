@@ -10,7 +10,13 @@ dependencies {
     // reachable; see audit/package-info.java allowedDependencies.
     implementation project(':user')
     implementation project(':auth')
+    // Task 9: cross-module listeners for order and member domain events.
+    // order.api.OrderEvent is in the public API package — safe cross-module reference.
+    // member.api.MemberEvent is likewise in the public API package.
+    implementation project(':order')
+    implementation project(':member')
 
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.modulith:spring-modulith-starter-core'

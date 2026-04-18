@@ -1,7 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.domain.Audit;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.audit.repo.AuditRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,11 +33,12 @@ class AuditServiceImplTest {
     @Test
     void recordStampsOccurredAtFromClockAndReturnsEvent() {
         Audit e = service.record(
-                AuditType.LOGIN_SUCCESS, ACTOR, TARGET, "{\"k\":1}", "req-xyz");
+                AuditResource.USER, AuditAction.LOGIN, ACTOR, TARGET, "{\"k\":1}", "req-xyz");
 
         assertThat(e).isNotNull();
         assertThat(e.occurredAt()).isEqualTo(FIXED);
-        assertThat(e.type()).isEqualTo(AuditType.LOGIN_SUCCESS);
+        assertThat(e.resource()).isEqualTo(AuditResource.USER);
+        assertThat(e.action()).isEqualTo(AuditAction.LOGIN);
         assertThat(e.actorUserId()).isEqualTo(ACTOR);
         assertThat(e.targetUserId()).isEqualTo(TARGET);
         assertThat(e.details()).isEqualTo("{\"k\":1}");
@@ -47,7 +49,7 @@ class AuditServiceImplTest {
     @Test
     void recordDelegatesToRepoWithSameEvent() {
         Audit returned = service.record(
-                AuditType.USER_REGISTERED, ACTOR, null, null, null);
+                AuditResource.USER, AuditAction.CREATE, ACTOR, null, null, null);
 
         ArgumentCaptor<Audit> captor = ArgumentCaptor.forClass(Audit.class);
         verify(repo).save(captor.capture());
@@ -57,7 +59,7 @@ class AuditServiceImplTest {
     @Test
     void recordAllowsNullActorTargetDetailsRequestId() {
         Audit e = service.record(
-                AuditType.LOGIN_FAILED, null, null, null, null);
+                AuditResource.USER, AuditAction.LOGIN, null, null, null, null);
 
         assertThat(e.actorUserId()).isNull();
         assertThat(e.targetUserId()).isNull();
@@ -68,8 +70,8 @@ class AuditServiceImplTest {
 
     @Test
     void recordGeneratesDistinctIdsAcrossCalls() {
-        Audit a = service.record(AuditType.LOGIN_SUCCESS, ACTOR, null, null, null);
-        Audit b = service.record(AuditType.LOGIN_SUCCESS, ACTOR, null, null, null);
+        Audit a = service.record(AuditResource.USER, AuditAction.LOGIN, ACTOR, null, null, null);
+        Audit b = service.record(AuditResource.USER, AuditAction.LOGIN, ACTOR, null, null, null);
 
         assertThat(a.id()).isNotEqualTo(b.id());
     }

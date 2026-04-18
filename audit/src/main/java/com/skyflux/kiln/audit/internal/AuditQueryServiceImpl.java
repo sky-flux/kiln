@@ -2,7 +2,8 @@ package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditQueryService;
 import com.skyflux.kiln.audit.domain.Audit;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.audit.repo.AuditRepository;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
@@ -27,7 +28,8 @@ class AuditQueryServiceImpl implements AuditQueryService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResult<Audit> list(PageQuery page, AuditType type, UUID actorUserId, UUID targetUserId) {
-        return repo.list(page, type, actorUserId, targetUserId);
+    public PageResult<Audit> list(PageQuery page, AuditResource resource, AuditAction action,
+                                  UUID actorUserId, UUID targetUserId) {
+        return repo.list(page, resource, action, actorUserId, targetUserId);
     }
 }

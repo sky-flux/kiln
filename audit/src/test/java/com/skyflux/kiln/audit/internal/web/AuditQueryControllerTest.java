@@ -2,7 +2,8 @@ package com.skyflux.kiln.audit.internal.web;
 
 import com.skyflux.kiln.audit.api.AuditQueryService;
 import com.skyflux.kiln.audit.domain.Audit;
-import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.domain.AuditAction;
+import com.skyflux.kiln.audit.domain.AuditResource;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 import org.junit.jupiter.api.Test;
@@ -65,9 +66,10 @@ class AuditQueryControllerTest {
         Audit e = new Audit(
                 id,
                 Instant.parse("2026-04-18T10:00:00Z"),
-                AuditType.LOGIN_SUCCESS,
+                AuditResource.USER,
+                AuditAction.LOGIN,
                 null, null, null, null);
-        when(queryService.list(any(), any(), any(), any()))
+        when(queryService.list(any(), any(), any(), any(), any()))
                 .thenReturn(PageResult.of(List.of(e), 1L, new PageQuery(1, 20, null)));
 
         mvc.perform(get("/api/v1/admin/audit-events"))
@@ -76,24 +78,27 @@ class AuditQueryControllerTest {
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.items[0].id").value(id.toString()))
-                .andExpect(jsonPath("$.items[0].type").value("LOGIN_SUCCESS"));
+                .andExpect(jsonPath("$.items[0].resource").value("USER"))
+                .andExpect(jsonPath("$.items[0].action").value("LOGIN"));
     }
 
     @Test
     void list_threads_filters_to_service() throws Exception {
         UUID actor = UUID.fromString("22222222-2222-2222-2222-222222222222");
-        when(queryService.list(any(), any(), any(), any()))
+        when(queryService.list(any(), any(), any(), any(), any()))
                 .thenReturn(PageResult.empty(new PageQuery(2, 50, null)));
 
         mvc.perform(get("/api/v1/admin/audit-events")
                         .param("page", "2")
                         .param("size", "50")
-                        .param("type", "LOGIN_FAILED")
+                        .param("resource", "ROLE")
+                        .param("action", "ASSIGN")
                         .param("actorUserId", actor.toString()))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<PageQuery> pageCaptor = ArgumentCaptor.forClass(PageQuery.class);
-        verify(queryService).list(pageCaptor.capture(), eq(AuditType.LOGIN_FAILED), eq(actor), isNull());
+        verify(queryService).list(pageCaptor.capture(),
+                eq(AuditResource.ROLE), eq(AuditAction.ASSIGN), eq(actor), isNull());
         PageQuery captured = pageCaptor.getValue();
         assertThat(captured.page()).isEqualTo(2);
         assertThat(captured.size()).isEqualTo(50);

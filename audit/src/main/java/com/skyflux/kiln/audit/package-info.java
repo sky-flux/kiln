@@ -15,5 +15,6 @@
  */
 @org.springframework.modulith.ApplicationModule(
         displayName = "Audit",
-        allowedDependencies = {"common", "infra", "user :: events", "auth :: events"})
+        allowedDependencies = {"common", "infra", "user :: events", "auth :: events",
+                               "order :: api", "member :: api"})
 package com.skyflux.kiln.audit;
