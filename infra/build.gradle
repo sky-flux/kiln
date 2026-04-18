@@ -103,6 +103,13 @@ jooq {
                         fluentSetters = true
                         javaTimeTypes = true
                         pojosEqualsAndHashCode = true
+                        // Disable to-many implicit join paths to eliminate the ambiguous-key-name
+                        // WARNING: users→tenants (direct FK) and users→user_roles→roles→tenants
+                        // (chained FK) both try to generate a method named `tenants` on UsersPath.
+                        // ToMany paths (the chained direction) are the source of the conflict;
+                        // disabling them removes the ambiguity without affecting Record types or
+                        // the direct to-one FK accessors that our repositories use.
+                        implicitJoinPathsToMany = false
                     }
                     target {
                         packageName = 'com.skyflux.kiln.infra.jooq.generated'
