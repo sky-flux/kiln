@@ -40,4 +40,17 @@ class PageResultTest {
 
         assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
     }
+
+    @Test
+    void mapTransformsItemsPreservingPaginationMetadata() {
+        PageQuery query = new PageQuery(2, 10, null);
+        PageResult<String> source = PageResult.of(List.of("a", "bb"), 2L, query);
+
+        PageResult<Integer> mapped = source.map(String::length);
+
+        assertThat(mapped.items()).containsExactly(1, 2);
+        assertThat(mapped.total()).isEqualTo(2L);
+        assertThat(mapped.page()).isEqualTo(2);
+        assertThat(mapped.size()).isEqualTo(10);
+    }
 }

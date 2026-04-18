@@ -82,7 +82,16 @@ jooq {
                             // silent on Ant-glob misses ("**/*.sql" matches nothing from the
                             // codegen working dir). Using projectDir + explicit file pattern
                             // keeps the task robust regardless of invocation cwd.
-                            property { key = 'scripts'; value = "${project.projectDir}/src/main/resources/db/migration/".toString() }
+                            property {
+                                key = 'scripts'
+                                // V*.sql glob matches all versioned migrations (V1__…, V7__…, etc.) but
+                                // NOT R__rls.sql, which contains PG-specific DDL (ENABLE ROW LEVEL SECURITY,
+                                // CREATE POLICY) that H2's DDLDatabase cannot parse.
+                                // The explicit directory trailing slash does NOT work here because it would
+                                // include R__rls.sql; a glob pattern matching only V-prefix files is the
+                                // correct and robust solution.
+                                value = "${project.projectDir}/src/main/resources/db/migration/V*.sql"
+                            }
                             property { key = 'sort'; value = 'flyway' }
                             property { key = 'defaultNameCase'; value = 'lower' }
                         }
