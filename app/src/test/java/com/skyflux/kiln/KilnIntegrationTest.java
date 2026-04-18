@@ -526,16 +526,17 @@ class KilnIntegrationTest {
 
     @Test
     void adminCanQueryAuditEventsViaHttp() {
-        // Registration publishes USER_REGISTERED; successful login publishes
-        // LOGIN_SUCCESS. Cross-BC listeners in the audit module translate both
-        // into audit_events rows that the admin query endpoint exposes.
+        // Registration publishes USER_REGISTERED (resource=USER, action=CREATE);
+        // successful login publishes LOGIN_SUCCESS (resource=USER, action=LOGIN).
+        // Cross-BC listeners in the audit module translate both into audits rows
+        // that the admin query endpoint exposes.
         String adminEmail = "audit-admin@example.com";
         String adminId = register("AuditAdmin", adminEmail, "S3cret-pass");
         roleAssignment.assign(UUID.fromString(adminId), RoleCode.ADMIN);
 
         String userEmail = "audit-user@example.com";
         register("AuditUser", userEmail, "S3cret-pass");
-        login(userEmail, "S3cret-pass");   // publishes LOGIN_SUCCESS
+        login(userEmail, "S3cret-pass");   // resource=USER, action=LOGIN
 
         String adminToken = login(adminEmail, "S3cret-pass");
 
@@ -549,18 +550,19 @@ class KilnIntegrationTest {
                 .contains("\"code\":0")
                 .contains("\"items\"");
 
-        String filtered = client.get().uri("/api/v1/admin/audit-events?page=1&size=20&type=LOGIN_SUCCESS")
+        // Filter by resource=USER, action=LOGIN — must return only LOGIN events.
+        String filtered = client.get().uri("/api/v1/admin/audit-events?page=1&size=20&resource=USER&action=LOGIN")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(String.class)
                 .returnResult().getResponseBody();
-        // Every item in the filtered page must carry type=LOGIN_SUCCESS and
+        // Every item in the filtered page must carry resource=USER and action=LOGIN;
         // at least one must exist (the user-login + admin-login above).
-        org.assertj.core.api.Assertions.assertThat(filtered).contains("\"LOGIN_SUCCESS\"");
+        org.assertj.core.api.Assertions.assertThat(filtered).contains("\"LOGIN\"");
+        org.assertj.core.api.Assertions.assertThat(filtered).contains("\"USER\"");
         org.assertj.core.api.Assertions.assertThat(filtered)
-                .doesNotContain("\"USER_REGISTERED\"")
-                .doesNotContain("\"LOGIN_FAILED\"");
+                .doesNotContain("\"CREATE\"");
     }
 
     // ──────────── Wave 1 — RLS tenant-isolation ────────────

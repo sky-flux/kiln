@@ -429,6 +429,32 @@
         }
       }
     },
+    "/api/v1/orders/{id}/pay" : {
+      "post" : {
+        "tags" : [ "order-controller" ],
+        "operationId" : "pay",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ROrderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/orders/{id}/deliver" : {
       "post" : {
         "tags" : [ "order-controller" ],
@@ -824,12 +850,20 @@
             "minimum" : 1
           }
         }, {
-          "name" : "type",
+          "name" : "resource",
           "in" : "query",
           "required" : false,
           "schema" : {
             "type" : "string",
-            "enum" : [ "USER_REGISTERED", "LOGIN_SUCCESS", "LOGIN_FAILED", "ROLE_ASSIGNED", "ROLE_REVOKED", "ACCOUNT_LOCKED" ]
+            "enum" : [ "USER", "TENANT", "ROLE", "ORDER", "PRODUCT", "MEMBER", "SYSTEM" ]
+          }
+        }, {
+          "name" : "action",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "CREATE", "READ", "UPDATE", "DELETE", "LOGIN", "LOGOUT", "PAY", "CANCEL", "ASSIGN", "REVOKE", "AWARD_POINTS" ]
           }
         }, {
           "name" : "actorUserId",
@@ -1532,9 +1566,13 @@
             "type" : "string",
             "format" : "date-time"
           },
-          "type" : {
+          "resource" : {
             "type" : "string",
-            "enum" : [ "USER_REGISTERED", "LOGIN_SUCCESS", "LOGIN_FAILED", "ROLE_ASSIGNED", "ROLE_REVOKED", "ACCOUNT_LOCKED" ]
+            "enum" : [ "USER", "TENANT", "ROLE", "ORDER", "PRODUCT", "MEMBER", "SYSTEM" ]
+          },
+          "action" : {
+            "type" : "string",
+            "enum" : [ "CREATE", "READ", "UPDATE", "DELETE", "LOGIN", "LOGOUT", "PAY", "CANCEL", "ASSIGN", "REVOKE", "AWARD_POINTS" ]
           },
           "actorUserId" : {
             "type" : "string",
