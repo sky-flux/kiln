@@ -9,6 +9,7 @@ import com.skyflux.kiln.member.domain.MemberLevel;
 import com.skyflux.kiln.member.repo.MemberJooqRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.time.Clock;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -39,6 +40,8 @@ class MemberControllerTest {
     @MockitoBean MemberService service;
     // UserRegisteredMemberListener (same package) requires this — provide mock so context loads
     @MockitoBean MemberJooqRepository memberJooqRepository;
+    // OrderPaidMemberListener (same package) requires a Clock — provide mock so context loads
+    @MockitoBean Clock clock;
 
     @Autowired MockMvc mvc;
 

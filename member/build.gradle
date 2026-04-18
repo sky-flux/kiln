@@ -3,6 +3,7 @@ dependencies {
     implementation project(':infra')
     implementation project(':tenant')
     implementation project(':user')
+    implementation project(':order')
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
