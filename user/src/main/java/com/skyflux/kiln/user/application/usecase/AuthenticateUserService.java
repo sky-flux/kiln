@@ -148,7 +148,11 @@ class AuthenticateUserService implements AuthenticateUserUseCase {
         repo.recordLoginSuccess(user.id());
         events.publishEvent(new LoginEvent.LoginSucceeded(user.id(), now, requestId));
 
-        StpUtil.login(user.id().value().toString());
+        // setTerminalExtra stores data on SaTerminalInfo (readable without JWT mode);
+        // setExtra stores data in extraData which is JWT-only and throws ApiDisabledException.
+        StpUtil.login(user.id().value().toString(),
+                new cn.dev33.satoken.stp.SaLoginModel()
+                        .setTerminalExtra("tenantId", user.tenantId().toString()));
         return StpUtil.getTokenValue();
     }
 }

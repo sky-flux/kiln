@@ -2,8 +2,11 @@ package com.skyflux.kiln.user.adapter.in.web;
 
 import com.skyflux.kiln.user.application.port.in.AuthenticateUserUseCase;
 import com.skyflux.kiln.user.application.port.in.CountUsersUseCase;
+import com.skyflux.kiln.user.application.port.in.DeleteUserUseCase;
 import com.skyflux.kiln.user.application.port.in.GetUserUseCase;
+import com.skyflux.kiln.user.application.port.in.ListUsersUseCase;
 import com.skyflux.kiln.user.application.port.in.RegisterUserUseCase;
+import com.skyflux.kiln.user.application.port.in.UpdateUserUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -55,6 +58,12 @@ class AdminControllerTest {
     RegisterUserUseCase registerUseCase;
     @MockitoBean
     AuthenticateUserUseCase authenticateUseCase;
+    @MockitoBean
+    ListUsersUseCase listUsersUseCase;
+    @MockitoBean
+    UpdateUserUseCase updateUserUseCase;
+    @MockitoBean
+    DeleteUserUseCase deleteUserUseCase;
 
     @Autowired
     MockMvc mvc;

@@ -2,6 +2,7 @@ package com.skyflux.kiln.auth.internal;
 
 import com.skyflux.kiln.auth.api.RoleAssignmentService;
 import com.skyflux.kiln.auth.domain.RoleCode;
+import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.user.domain.event.UserRegistered;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,8 @@ class UserRegisteredListenerTest {
     @Test
     void assignsUserRoleOnRegistration() {
         UUID userIdValue = UUID.fromString("33333333-3333-3333-3333-333333333333");
-        UserRegistered event = UserRegistered.of(new UserId(userIdValue), "alice@example.com");
+        UUID tenantId = Ids.next();
+        UserRegistered event = UserRegistered.of(new UserId(userIdValue), tenantId, "alice@example.com");
 
         listener.on(event);
 

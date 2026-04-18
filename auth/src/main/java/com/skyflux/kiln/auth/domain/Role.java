@@ -11,11 +11,12 @@ import java.util.UUID;
  * human-friendly label. Both are required; a blank {@code code} is rejected
  * because it would silently match every {@code @SaCheckRole("")} annotation.
  */
-public record Role(UUID id, String code, String name) {
+public record Role(UUID id, String code, String name, UUID tenantId) {
     public Role {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(tenantId, "tenantId");
         if (code.isBlank()) {
             throw new IllegalArgumentException("code blank");
         }

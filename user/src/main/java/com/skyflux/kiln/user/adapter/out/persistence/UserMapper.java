@@ -22,6 +22,9 @@ import java.time.ZoneOffset;
  * round-trip. {@code locked_until} is nullable on both sides: {@code null}
  * means "not locked". The DB column is {@code TIMESTAMPTZ}; jOOQ surfaces it
  * as {@link OffsetDateTime}, which converts losslessly to/from {@link Instant}.
+ *
+ * <p>Wave 1 T8 adds {@code tenant_id} round-trip. Every user belongs to exactly
+ * one tenant; the column is NOT NULL in the DB schema.
  */
 @Component
 class UserMapper {
@@ -30,13 +33,16 @@ class UserMapper {
     User toAggregate(UsersRecord record) {
         Integer failed = record.getFailedLoginAttempts();
         OffsetDateTime lockedUntil = record.getLockedUntil();
+        String status = record.getStatus();
         return User.reconstitute(
                 new UserId(record.getId()),
+                record.getTenantId(),
                 record.getName(),
                 record.getEmail(),
                 record.getPasswordHash(),
                 failed == null ? 0 : failed,
-                lockedUntil == null ? null : lockedUntil.toInstant());
+                lockedUntil == null ? null : lockedUntil.toInstant(),
+                status == null ? "ACTIVE" : status);
     }
 
     /**
@@ -51,6 +57,7 @@ class UserMapper {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         UsersRecord record = new UsersRecord();
         record.setId(user.id().value());
+        record.setTenantId(user.tenantId());
         record.setName(user.name());
         record.setEmail(user.email());
         record.setPasswordHash(user.passwordHash());
@@ -59,6 +66,7 @@ class UserMapper {
         record.setFailedLoginAttempts(user.failedLoginAttempts());
         Instant lockedUntil = user.lockedUntil();
         record.setLockedUntil(lockedUntil == null ? null : lockedUntil.atOffset(ZoneOffset.UTC));
+        record.setStatus(user.status());
         return record;
     }
 }

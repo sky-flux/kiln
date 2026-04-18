@@ -1,5 +1,7 @@
 package com.skyflux.kiln.user.adapter.out.persistence;
 
+import com.skyflux.kiln.common.result.PageQuery;
+import com.skyflux.kiln.common.result.PageResult;
 import com.skyflux.kiln.infra.jooq.generated.Tables;
 import com.skyflux.kiln.infra.jooq.generated.tables.records.UsersRecord;
 import com.skyflux.kiln.user.application.port.out.UserRepository;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -82,11 +85,13 @@ class UserJooqRepositoryAdapter implements UserRepository {
                 // locked_until) so the mutated state lands. Enforced by
                 // UserJooqRepositoryAdapterTest.saveUpdatesLockoutFieldsOnUpsert.
                 // ────────────────────────────────────────────────────────────────
+                .set(Tables.USERS.TENANT_ID, r.getTenantId())
                 .set(Tables.USERS.NAME, r.getName())
                 .set(Tables.USERS.EMAIL, r.getEmail())
                 .set(Tables.USERS.PASSWORD_HASH, r.getPasswordHash())
                 .set(Tables.USERS.FAILED_LOGIN_ATTEMPTS, r.getFailedLoginAttempts())
                 .set(Tables.USERS.LOCKED_UNTIL, r.getLockedUntil())
+                .set(Tables.USERS.STATUS, r.getStatus())
                 .set(Tables.USERS.UPDATED_AT, r.getUpdatedAt())
                 .execute();
     }
@@ -136,5 +141,21 @@ class UserJooqRepositoryAdapter implements UserRepository {
             throw new IllegalStateException("recordLoginSuccess: user not found " + id);
         }
         return mapper.toAggregate(r);
+    }
+
+    @Override
+    public PageResult<User> listActive(PageQuery query) {
+        Objects.requireNonNull(query, "query");
+        var cond = Tables.USERS.STATUS.eq("ACTIVE");
+        long total = Optional.ofNullable(
+                dsl.selectCount().from(Tables.USERS).where(cond).fetchOne(0, Long.class)
+        ).orElse(0L);
+        List<User> items = dsl.selectFrom(Tables.USERS)
+                .where(cond)
+                .orderBy(Tables.USERS.CREATED_AT.desc())
+                .limit(query.size()).offset(query.offset())
+                .fetch()
+                .map(mapper::toAggregate);
+        return PageResult.of(items, total, query);
     }
 }

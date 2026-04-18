@@ -7,6 +7,9 @@ dependencies {
     // User for the UserRegistered domain event — consumed by UserRegisteredListener
     // to auto-assign the default USER role on registration (Modulith event pattern).
     implementation project(':user')
+    // Tenant for TenantContext (ScopedValue) used by RoleCrudService and the
+    // RoleCrudController to resolve the current tenant from the request scope.
+    implementation project(':tenant')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'

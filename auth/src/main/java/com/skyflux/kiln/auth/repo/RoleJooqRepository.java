@@ -5,6 +5,9 @@ import com.skyflux.kiln.infra.jooq.generated.Tables;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,7 +35,7 @@ public class RoleJooqRepository {
         return dsl.selectFrom(Tables.ROLES)
                 .where(Tables.ROLES.CODE.eq(code))
                 .fetchOptional()
-                .map(r -> new Role(r.getId(), r.getCode(), r.getName()));
+                .map(r -> new Role(r.getId(), r.getCode(), r.getName(), r.getTenantId()));
     }
 
     public Optional<Role> findById(UUID id) {
@@ -40,6 +43,33 @@ public class RoleJooqRepository {
         return dsl.selectFrom(Tables.ROLES)
                 .where(Tables.ROLES.ID.eq(id))
                 .fetchOptional()
-                .map(r -> new Role(r.getId(), r.getCode(), r.getName()));
+                .map(r -> new Role(r.getId(), r.getCode(), r.getName(), r.getTenantId()));
+    }
+
+    public void save(Role role) {
+        Objects.requireNonNull(role, "role");
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        dsl.insertInto(Tables.ROLES)
+                .set(Tables.ROLES.ID, role.id())
+                .set(Tables.ROLES.CODE, role.code())
+                .set(Tables.ROLES.NAME, role.name())
+                .set(Tables.ROLES.TENANT_ID, role.tenantId())
+                .set(Tables.ROLES.CREATED_AT, now)
+                .onConflict(Tables.ROLES.ID)
+                .doUpdate()
+                .set(Tables.ROLES.NAME, role.name())
+                .execute();
+    }
+
+    public void delete(UUID roleId) {
+        Objects.requireNonNull(roleId, "roleId");
+        dsl.deleteFrom(Tables.ROLES).where(Tables.ROLES.ID.eq(roleId)).execute();
+    }
+
+    public List<Role> listAll() {
+        return dsl.selectFrom(Tables.ROLES)
+                .orderBy(Tables.ROLES.CODE)
+                .fetch()
+                .map(r -> new Role(r.getId(), r.getCode(), r.getName(), r.getTenantId()));
     }
 }

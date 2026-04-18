@@ -1,5 +1,6 @@
 package com.skyflux.kiln.user.domain.model;
 
+import com.skyflux.kiln.common.util.Ids;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -10,7 +11,7 @@ public record UserId(UUID value) {
     }
 
     public static UserId newId() {
-        return new UserId(UUID.randomUUID());
+        return new UserId(Ids.next());
     }
 
     public static UserId of(String s) {

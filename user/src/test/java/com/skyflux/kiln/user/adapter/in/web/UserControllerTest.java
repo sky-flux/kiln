@@ -1,9 +1,16 @@
 package com.skyflux.kiln.user.adapter.in.web;
 
+import com.skyflux.kiln.common.result.PageQuery;
+import com.skyflux.kiln.common.result.PageResult;
+import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.user.application.port.in.AuthenticateUserUseCase;
 import com.skyflux.kiln.user.application.port.in.CountUsersUseCase;
+import com.skyflux.kiln.user.application.port.in.DeleteUserUseCase;
 import com.skyflux.kiln.user.application.port.in.GetUserUseCase;
+import com.skyflux.kiln.user.application.port.in.ListUsersUseCase;
 import com.skyflux.kiln.user.application.port.in.RegisterUserUseCase;
+import com.skyflux.kiln.user.application.port.in.UpdateUserUseCase;
+import com.skyflux.kiln.user.domain.model.User;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,11 +22,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -74,6 +86,15 @@ class UserControllerTest {
      */
     @MockitoBean
     CountUsersUseCase countUsers;
+
+    @MockitoBean
+    ListUsersUseCase listUsersUseCase;
+
+    @MockitoBean
+    UpdateUserUseCase updateUserUseCase;
+
+    @MockitoBean
+    DeleteUserUseCase deleteUserUseCase;
 
     @Autowired
     MockMvc mvc;
@@ -179,5 +200,65 @@ class UserControllerTest {
                         .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(uuid.toString()));
+    }
+
+    // ──────────── Wave 2a: GET list, PUT update, DELETE ────────────
+
+    @Test
+    void get_list_returns_200_with_paginated_users() throws Exception {
+        UUID tenantId = Ids.next();
+        User u = User.register(tenantId, "Alice", "alice@list.com", "hash");
+        PageQuery query = new PageQuery(1, 20, null);
+        when(listUsersUseCase.execute(any(PageQuery.class)))
+                .thenReturn(PageResult.of(List.of(u), 1L, query));
+
+        mvc.perform(get("/api/v1/users")
+                        .param("page", "1").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items[0].name").value("Alice"))
+                .andExpect(jsonPath("$.data.total").value(1));
+    }
+
+    @Test
+    void put_update_returns_200_with_updated_user() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID tenantId = Ids.next();
+        User updated = User.reconstitute(new UserId(id), tenantId, "New Name",
+                "u@e.com", "hash", 0, null, "ACTIVE");
+        when(updateUserUseCase.execute(any(UpdateUserUseCase.Command.class))).thenReturn(updated);
+
+        String body = """
+                {"name":"New Name"}
+                """;
+
+        mvc.perform(put("/api/v1/users/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("New Name"));
+    }
+
+    @Test
+    void put_with_blank_name_returns_400() throws Exception {
+        UUID id = UUID.randomUUID();
+        String body = """
+                {"name":""}
+                """;
+
+        mvc.perform(put("/api/v1/users/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void delete_returns_204() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mvc.perform(delete("/api/v1/users/" + id))
+                .andExpect(status().isNoContent());
+
+        verify(deleteUserUseCase).execute(new UserId(id));
     }
 }

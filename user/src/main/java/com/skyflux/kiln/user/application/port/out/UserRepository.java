@@ -1,5 +1,7 @@
 package com.skyflux.kiln.user.application.port.out;
 
+import com.skyflux.kiln.common.result.PageQuery;
+import com.skyflux.kiln.common.result.PageResult;
 import com.skyflux.kiln.user.domain.model.User;
 import com.skyflux.kiln.user.domain.model.UserId;
 
@@ -10,6 +12,9 @@ import java.util.Optional;
 /** Outbound port: persistence abstraction for the {@code User} aggregate. */
 public interface UserRepository {
     Optional<User> findById(UserId id);
+
+    /** List active (non-deleted) users, paginated. RLS auto-filters by tenant. */
+    PageResult<User> listActive(PageQuery query);
 
     /**
      * Look up a user by their (normalized, lowercase) email address.

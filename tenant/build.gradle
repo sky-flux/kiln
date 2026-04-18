@@ -1,0 +1,25 @@
+dependencies {
+    implementation project(':common')
+    implementation project(':infra')
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.modulith:spring-modulith-starter-core'
+    implementation 'cn.dev33:sa-token-spring-boot3-starter:1.45.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
+    testImplementation 'org.springframework.boot:spring-boot-starter-flyway'
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit { counter = 'LINE'; minimum = 0.70 }
+            limit { counter = 'BRANCH'; minimum = 0.60 }
+        }
+    }
+}
+check.dependsOn jacocoTestCoverageVerification

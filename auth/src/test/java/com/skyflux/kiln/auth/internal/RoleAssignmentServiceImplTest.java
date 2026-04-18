@@ -58,7 +58,7 @@ class RoleAssignmentServiceImplTest {
     @Test
     void revokeLooksUpRoleByCodeAndDelegates() {
         when(roles.findByCode("ADMIN"))
-                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator")));
+                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator", UUID.fromString("00000000-0000-7000-8000-000000000001"))));
 
         service().revoke(USER_ID, RoleCode.ADMIN);
 
@@ -93,7 +93,7 @@ class RoleAssignmentServiceImplTest {
     @Test
     void assignPublishesRoleAssignedEvent() {
         when(roles.findByCode("ADMIN"))
-                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator")));
+                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator", UUID.fromString("00000000-0000-7000-8000-000000000001"))));
 
         service().assign(USER_ID, RoleCode.ADMIN);
 
@@ -109,7 +109,7 @@ class RoleAssignmentServiceImplTest {
     @Test
     void revokePublishesRoleRevokedEvent() {
         when(roles.findByCode("ADMIN"))
-                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator")));
+                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator", UUID.fromString("00000000-0000-7000-8000-000000000001"))));
 
         service().revoke(USER_ID, RoleCode.ADMIN);
 
@@ -125,7 +125,7 @@ class RoleAssignmentServiceImplTest {
     @Test
     void assignDoesNotPublishWhenRepoThrows() {
         when(roles.findByCode("ADMIN"))
-                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator")));
+                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator", UUID.fromString("00000000-0000-7000-8000-000000000001"))));
         doThrow(new RuntimeException("db down"))
                 .when(userRoles).assign(USER_ID, ADMIN_ROLE_ID);
 
@@ -138,7 +138,7 @@ class RoleAssignmentServiceImplTest {
     @Test
     void revokeDoesNotPublishWhenRepoThrows() {
         when(roles.findByCode("ADMIN"))
-                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator")));
+                .thenReturn(Optional.of(new Role(ADMIN_ROLE_ID, "ADMIN", "Administrator", UUID.fromString("00000000-0000-7000-8000-000000000001"))));
         doThrow(new RuntimeException("db down"))
                 .when(userRoles).revoke(USER_ID, ADMIN_ROLE_ID);
 

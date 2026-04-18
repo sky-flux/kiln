@@ -1,8 +1,11 @@
 package com.skyflux.kiln.auth.repo;
 
+import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.infra.jooq.generated.Tables;
 import org.jooq.DSLContext;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,14 +29,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  *     <li>ADMIN grants {@code user.admin} + {@code user.read}</li>
  *     <li>USER  grants {@code user.read}</li>
  * </ul>
+ *
+ * <p>Wave 1 T8: {@code users.tenant_id} is NOT NULL with a FK to {@code tenants}.
+ * A tenant row is seeded in {@code @BeforeAll} before any user fixtures are inserted.
  */
 @SpringBootTest(classes = PermissionJooqRepositoryTest.TestApp.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PermissionJooqRepositoryTest {
 
     private static final UUID ADMIN_ROLE_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID USER_ROLE_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+    /** Shared tenant seeded once before all tests. */
+    private static final UUID TENANT_ID = Ids.next();
 
     @SpringBootApplication(exclude = {
             org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration.class,
@@ -55,6 +65,17 @@ class PermissionJooqRepositoryTest {
 
     @Autowired
     DSLContext dsl;
+
+    @BeforeAll
+    void seedTenant() {
+        dsl.insertInto(Tables.TENANTS)
+                .set(Tables.TENANTS.ID, TENANT_ID)
+                .set(Tables.TENANTS.CODE, "perm-test-tenant")
+                .set(Tables.TENANTS.NAME, "Perm Test Tenant")
+                .set(Tables.TENANTS.CREATED_AT, OffsetDateTime.now(ZoneOffset.UTC))
+                .onConflictDoNothing()
+                .execute();
+    }
 
     @Test
     void adminRoleGrantsAllPermissions() {
@@ -100,6 +121,7 @@ class PermissionJooqRepositoryTest {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         dsl.insertInto(Tables.USERS)
                 .set(Tables.USERS.ID, id)
+                .set(Tables.USERS.TENANT_ID, TENANT_ID)
                 .set(Tables.USERS.NAME, "test-" + email)
                 .set(Tables.USERS.EMAIL, email)
                 .set(Tables.USERS.PASSWORD_HASH, "$argon2id$test-fixture")

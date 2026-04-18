@@ -1,8 +1,11 @@
 package com.skyflux.kiln.auth.repo;
 
+import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.infra.jooq.generated.Tables;
 import org.jooq.DSLContext;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,15 +31,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Seeds a throwaway {@code users} row first; {@code user_roles.user_id}
  * has an FK on {@code users.id} so inserting without a matching row violates
  * the constraint. {@code password_hash} is NOT NULL so we pass an obviously
- * fake token.
+ * fake token. Wave 1 T8: {@code tenant_id} is also NOT NULL — a tenant row
+ * is seeded in {@code @BeforeAll}.
  */
 @SpringBootTest(classes = UserRoleJooqRepositoryTest.TestApp.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class UserRoleJooqRepositoryTest {
 
     private static final UUID ADMIN_ROLE_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID USER_ROLE_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+    /** Shared tenant seeded once before all tests. */
+    private static final UUID TENANT_ID = Ids.next();
 
     @SpringBootApplication(exclude = {
             org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration.class,
@@ -55,6 +63,17 @@ class UserRoleJooqRepositoryTest {
 
     @Autowired
     DSLContext dsl;
+
+    @BeforeAll
+    void seedTenant() {
+        dsl.insertInto(Tables.TENANTS)
+                .set(Tables.TENANTS.ID, TENANT_ID)
+                .set(Tables.TENANTS.CODE, "auth-test-tenant")
+                .set(Tables.TENANTS.NAME, "Auth Test Tenant")
+                .set(Tables.TENANTS.CREATED_AT, OffsetDateTime.now(ZoneOffset.UTC))
+                .onConflictDoNothing()
+                .execute();
+    }
 
     @Test
     void assignThenFindRoundTrips() {
@@ -121,13 +140,14 @@ class UserRoleJooqRepositoryTest {
     /**
      * Inserts a minimal {@code users} row so we can satisfy the FK on
      * {@code user_roles.user_id}. Each test uses its own email to avoid
-     * UNIQUE(email) collisions across test methods.
+     * UNIQUE(email, tenant_id) collisions across test methods.
      */
     private UUID seedUser(String email) {
         UUID id = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         dsl.insertInto(Tables.USERS)
                 .set(Tables.USERS.ID, id)
+                .set(Tables.USERS.TENANT_ID, TENANT_ID)
                 .set(Tables.USERS.NAME, "test-" + email)
                 .set(Tables.USERS.EMAIL, email)
                 .set(Tables.USERS.PASSWORD_HASH, "$argon2id$test-fixture")

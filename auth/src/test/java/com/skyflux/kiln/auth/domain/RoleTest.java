@@ -18,38 +18,52 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class RoleTest {
 
     private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID TENANT_ID = UUID.fromString("00000000-0000-7000-8000-000000000001");
+
+    @Test
+    void roleShouldCarryTenantId() {
+        Role r = new Role(ID, "MANAGER", "Manager", TENANT_ID);
+        assertThat(r.tenantId()).isEqualTo(TENANT_ID);
+    }
 
     @Test
     void buildsWithValidFields() {
-        Role r = new Role(ID, "ADMIN", "Administrator");
+        Role r = new Role(ID, "ADMIN", "Administrator", TENANT_ID);
 
         assertThat(r.id()).isEqualTo(ID);
         assertThat(r.code()).isEqualTo("ADMIN");
         assertThat(r.name()).isEqualTo("Administrator");
+        assertThat(r.tenantId()).isEqualTo(TENANT_ID);
     }
 
     @Test
     void rejectsNullId() {
         assertThatNullPointerException()
-                .isThrownBy(() -> new Role(null, "ADMIN", "Administrator"));
+                .isThrownBy(() -> new Role(null, "ADMIN", "Administrator", TENANT_ID));
     }
 
     @Test
     void rejectsNullCode() {
         assertThatNullPointerException()
-                .isThrownBy(() -> new Role(ID, null, "Administrator"));
+                .isThrownBy(() -> new Role(ID, null, "Administrator", TENANT_ID));
     }
 
     @Test
     void rejectsNullName() {
         assertThatNullPointerException()
-                .isThrownBy(() -> new Role(ID, "ADMIN", null));
+                .isThrownBy(() -> new Role(ID, "ADMIN", null, TENANT_ID));
+    }
+
+    @Test
+    void rejectsNullTenantId() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new Role(ID, "ADMIN", "Administrator", null));
     }
 
     @Test
     void rejectsBlankCode() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new Role(ID, "   ", "Administrator"))
+                .isThrownBy(() -> new Role(ID, "   ", "Administrator", TENANT_ID))
                 .withMessageContaining("code blank");
     }
 

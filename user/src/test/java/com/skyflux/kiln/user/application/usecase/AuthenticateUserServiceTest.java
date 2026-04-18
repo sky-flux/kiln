@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.skyflux.kiln.common.exception.AppCode;
 import com.skyflux.kiln.common.exception.AppException;
 import com.skyflux.kiln.common.security.PasswordService;
+import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.infra.security.SecurityProperties;
 import com.skyflux.kiln.user.application.port.in.AuthenticateUserUseCase;
 import com.skyflux.kiln.user.application.port.out.UserRepository;
@@ -26,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
@@ -43,6 +45,7 @@ import static org.mockito.Mockito.when;
 class AuthenticateUserServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-04-18T10:15:30Z");
+    private static final UUID TENANT_ID = Ids.next();
 
     @Mock
     UserRepository repo;
@@ -97,7 +100,7 @@ class AuthenticateUserServiceTest {
     @Test
     void wrong_password_returns_LOGIN_FAILED() {
         UserId id = UserId.newId();
-        User user = User.reconstitute(id, "Alice", "alice@example.com", "stored-hash", 0, null);
+        User user = User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 0, null, "ACTIVE");
         when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordService.verify("bad-pw", "stored-hash")).thenReturn(false);
 
@@ -113,9 +116,11 @@ class AuthenticateUserServiceTest {
     @Test
     void happy_path_logs_in_via_StpUtil_and_returns_token() {
         UserId id = UserId.newId();
-        User user = User.reconstitute(id, "Alice", "alice@example.com", "stored-hash", 0, null);
+        User user = User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 0, null, "ACTIVE");
         when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordService.verify("S3cret!", "stored-hash")).thenReturn(true);
+        when(repo.recordLoginSuccess(id))
+                .thenReturn(User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 0, null, "ACTIVE"));
 
         try (MockedStatic<StpUtil> mocked = mockStatic(StpUtil.class)) {
             mocked.when(StpUtil::getTokenValue).thenReturn("tok-abc-123");
@@ -126,7 +131,9 @@ class AuthenticateUserServiceTest {
             String token = service.execute(cmd);
 
             assertThat(token).isEqualTo("tok-abc-123");
-            mocked.verify(() -> StpUtil.login(id.value().toString()));
+            // tenantId is embedded in the SaLoginModel extras — just verify login was called with the right userId
+            mocked.verify(() -> StpUtil.login(eq(id.value().toString()),
+                    any(cn.dev33.satoken.stp.SaLoginModel.class)));
         }
     }
 
@@ -135,7 +142,7 @@ class AuthenticateUserServiceTest {
         when(repo.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
         UserId id = UserId.newId();
-        User user = User.reconstitute(id, "Alice", "alice@example.com", "stored-hash", 0, null);
+        User user = User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 0, null, "ACTIVE");
         lenient().when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         lenient().when(passwordService.verify(any(), eq("stored-hash"))).thenReturn(false);
 
@@ -178,7 +185,7 @@ class AuthenticateUserServiceTest {
         UserId id = UserId.newId();
         Instant lockedUntil = NOW.plus(Duration.ofMinutes(1));
         User locked = User.reconstitute(
-                id, "Alice", "alice@example.com", "stored-hash", 0, lockedUntil);
+                id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 0, lockedUntil, "ACTIVE");
         when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(locked));
 
         AuthenticateUserUseCase.Command cmd =
@@ -203,12 +210,12 @@ class AuthenticateUserServiceTest {
     void increments_counter_on_wrong_password_below_threshold() {
         UserId id = UserId.newId();
         User user = User.reconstitute(
-                id, "Alice", "alice@example.com", "stored-hash", 2, null);
+                id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 2, null, "ACTIVE");
         when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordService.verify("bad", "stored-hash")).thenReturn(false);
         // Gate 3 C1: service now calls repo.recordLoginFailure (atomic SQL) instead of save.
         when(repo.recordLoginFailure(eq(id), eq(NOW), anyInt(), any()))
-                .thenReturn(User.reconstitute(id, "Alice", "alice@example.com", "stored-hash", 3, null));
+                .thenReturn(User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 3, null, "ACTIVE"));
 
         assertThatThrownBy(() -> service.execute(
                 new AuthenticateUserUseCase.Command("alice@example.com", "bad")))
@@ -232,12 +239,12 @@ class AuthenticateUserServiceTest {
         // (tested against real Postgres in UserJooqRepositoryAdapterTest).
         UserId id = UserId.newId();
         User user = User.reconstitute(
-                id, "Alice", "alice@example.com", "stored-hash", 4, null);
+                id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 4, null, "ACTIVE");
         when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordService.verify("bad", "stored-hash")).thenReturn(false);
         when(repo.recordLoginFailure(eq(id), eq(NOW), anyInt(), any()))
-                .thenReturn(User.reconstitute(id, "Alice", "alice@example.com", "stored-hash",
-                        0, NOW.plus(Duration.ofMinutes(15))));
+                .thenReturn(User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash",
+                        0, NOW.plus(Duration.ofMinutes(15)), "ACTIVE"));
 
         assertThatThrownBy(() -> service.execute(
                 new AuthenticateUserUseCase.Command("alice@example.com", "bad")))
@@ -250,11 +257,11 @@ class AuthenticateUserServiceTest {
     void resets_counter_and_publishes_LoginSucceeded_on_success() {
         UserId id = UserId.newId();
         User user = User.reconstitute(
-                id, "Alice", "alice@example.com", "stored-hash", 3, null);
+                id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 3, null, "ACTIVE");
         when(repo.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordService.verify("S3cret!", "stored-hash")).thenReturn(true);
         when(repo.recordLoginSuccess(id))
-                .thenReturn(User.reconstitute(id, "Alice", "alice@example.com", "stored-hash", 0, null));
+                .thenReturn(User.reconstitute(id, TENANT_ID, "Alice", "alice@example.com", "stored-hash", 0, null, "ACTIVE"));
 
         try (MockedStatic<StpUtil> mocked = mockStatic(StpUtil.class)) {
             mocked.when(StpUtil::getTokenValue).thenReturn("tok-xyz");
