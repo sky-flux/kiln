@@ -2,8 +2,8 @@ package com.skyflux.kiln.audit.internal.web;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import com.skyflux.kiln.audit.api.AuditQueryService;
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 import jakarta.validation.constraints.Max;
@@ -41,10 +41,10 @@ public class AuditQueryController {
 
     @GetMapping
     @SaCheckRole("ADMIN")
-    public PageResult<AuditEvent> list(
+    public PageResult<Audit> list(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int size,
-            @RequestParam(required = false) AuditEventType type,
+            @RequestParam(required = false) AuditType type,
             @RequestParam(required = false) UUID actorUserId,
             @RequestParam(required = false) UUID targetUserId) {
         PageQuery query = new PageQuery(page, size, null);

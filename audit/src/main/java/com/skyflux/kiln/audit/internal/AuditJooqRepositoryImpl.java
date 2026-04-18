@@ -1,12 +1,12 @@
 package com.skyflux.kiln.audit.internal;
 
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
-import com.skyflux.kiln.audit.repo.AuditEventJooqRepository;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.repo.AuditRepository;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 import com.skyflux.kiln.infra.jooq.generated.Tables;
-import com.skyflux.kiln.infra.jooq.generated.tables.records.AuditEventsRecord;
+import com.skyflux.kiln.infra.jooq.generated.tables.records.AuditsRecord;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.JSON;
@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * jOOQ-backed {@link AuditEventJooqRepository}.
+ * jOOQ-backed {@link AuditRepository}.
  *
  * <p>Column-mapping notes:
  * <ul>
@@ -37,73 +37,73 @@ import java.util.UUID;
  * </ul>
  */
 @Repository
-class AuditEventJooqRepositoryImpl implements AuditEventJooqRepository {
+class AuditJooqRepositoryImpl implements AuditRepository {
 
     private final DSLContext dsl;
 
-    AuditEventJooqRepositoryImpl(DSLContext dsl) {
+    AuditJooqRepositoryImpl(DSLContext dsl) {
         this.dsl = dsl;
     }
 
     @Override
-    public void save(AuditEvent event) {
-        Objects.requireNonNull(event, "event");
-        dsl.insertInto(Tables.AUDIT_EVENTS)
-                .set(Tables.AUDIT_EVENTS.ID, event.id())
-                .set(Tables.AUDIT_EVENTS.OCCURRED_AT, event.occurredAt().atOffset(ZoneOffset.UTC))
-                .set(Tables.AUDIT_EVENTS.TYPE, event.type().name())
-                .set(Tables.AUDIT_EVENTS.ACTOR_USER_ID, event.actorUserId())
-                .set(Tables.AUDIT_EVENTS.TARGET_USER_ID, event.targetUserId())
-                .set(Tables.AUDIT_EVENTS.DETAILS, event.details() == null ? null : JSON.valueOf(event.details()))
-                .set(Tables.AUDIT_EVENTS.REQUEST_ID, event.requestId())
+    public void save(Audit audit) {
+        Objects.requireNonNull(audit, "audit");
+        dsl.insertInto(Tables.AUDITS)
+                .set(Tables.AUDITS.ID, audit.id())
+                .set(Tables.AUDITS.OCCURRED_AT, audit.occurredAt().atOffset(ZoneOffset.UTC))
+                .set(Tables.AUDITS.TYPE, audit.type().name())
+                .set(Tables.AUDITS.ACTOR_USER_ID, audit.actorUserId())
+                .set(Tables.AUDITS.TARGET_USER_ID, audit.targetUserId())
+                .set(Tables.AUDITS.DETAILS, audit.details() == null ? null : JSON.valueOf(audit.details()))
+                .set(Tables.AUDITS.REQUEST_ID, audit.requestId())
                 .execute();
     }
 
     @Override
-    public PageResult<AuditEvent> list(PageQuery page, AuditEventType type, UUID actorUserId, UUID targetUserId) {
+    public PageResult<Audit> list(PageQuery page, AuditType type, UUID actorUserId, UUID targetUserId) {
         Objects.requireNonNull(page, "page");
         Condition where = buildWhere(type, actorUserId, targetUserId);
 
-        List<AuditEventsRecord> rows = dsl.selectFrom(Tables.AUDIT_EVENTS)
+        List<AuditsRecord> rows = dsl.selectFrom(Tables.AUDITS)
                 .where(where)
-                .orderBy(Tables.AUDIT_EVENTS.OCCURRED_AT.desc(), Tables.AUDIT_EVENTS.ID.desc())
+                .orderBy(Tables.AUDITS.OCCURRED_AT.desc(), Tables.AUDITS.ID.desc())
                 .limit(page.size())
                 .offset(page.offset())
                 .fetch();
 
-        List<AuditEvent> items = new ArrayList<>(rows.size());
-        for (AuditEventsRecord r : rows) {
+        List<Audit> items = new ArrayList<>(rows.size());
+        for (AuditsRecord r : rows) {
             items.add(toDomain(r));
         }
         return PageResult.of(items, count(type, actorUserId, targetUserId), page);
     }
 
     @Override
-    public long count(AuditEventType type, UUID actorUserId, UUID targetUserId) {
-        return dsl.fetchCount(Tables.AUDIT_EVENTS, buildWhere(type, actorUserId, targetUserId));
+    public long count(AuditType type, UUID actorUserId, UUID targetUserId) {
+        return dsl.fetchCount(Tables.AUDITS, buildWhere(type, actorUserId, targetUserId));
     }
 
-    private static Condition buildWhere(AuditEventType type, UUID actorUserId, UUID targetUserId) {
+    private static Condition buildWhere(AuditType type, UUID actorUserId, UUID targetUserId) {
         Condition where = DSL.noCondition();
         if (type != null) {
-            where = where.and(Tables.AUDIT_EVENTS.TYPE.eq(type.name()));
+            where = where.and(Tables.AUDITS.TYPE.eq(type.name()));
         }
         if (actorUserId != null) {
-            where = where.and(Tables.AUDIT_EVENTS.ACTOR_USER_ID.eq(actorUserId));
+            where = where.and(Tables.AUDITS.ACTOR_USER_ID.eq(actorUserId));
         }
         if (targetUserId != null) {
-            where = where.and(Tables.AUDIT_EVENTS.TARGET_USER_ID.eq(targetUserId));
+            where = where.and(Tables.AUDITS.TARGET_USER_ID.eq(targetUserId));
         }
         return where;
     }
 
-    private static AuditEvent toDomain(AuditEventsRecord r) {
+    private static Audit toDomain(AuditsRecord r) {
         OffsetDateTime occurred = r.getOccurredAt();
         JSON details = r.getDetails();
-        return new AuditEvent(
+        return new Audit(
                 r.getId(),
                 occurred.toInstant(),
-                AuditEventType.valueOf(r.getType()),
+                AuditType.valueOf(r.getType()),
                 r.getActorUserId(),
                 r.getTargetUserId(),
                 details == null ? null : details.data(),

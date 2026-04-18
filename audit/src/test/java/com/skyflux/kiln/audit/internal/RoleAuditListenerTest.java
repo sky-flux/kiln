@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.auth.domain.RoleCode;
 import com.skyflux.kiln.auth.domain.event.RoleEvent;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ class RoleAuditListenerTest {
         listener.on(event);
 
         verify(auditService).record(
-                AuditEventType.ROLE_ASSIGNED, null, userId,
+                AuditType.ROLE_ASSIGNED, null, userId,
                 "{\"role\":\"USER\"}", null);
     }
 
@@ -49,7 +49,7 @@ class RoleAuditListenerTest {
         listener.on(event);
 
         verify(auditService).record(
-                AuditEventType.ROLE_REVOKED, null, userId,
+                AuditType.ROLE_REVOKED, null, userId,
                 "{\"role\":\"ADMIN\"}", null);
     }
 }

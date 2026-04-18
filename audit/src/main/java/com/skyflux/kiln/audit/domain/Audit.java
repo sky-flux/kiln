@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * Immutable record of a single audit-log row.
  *
- * <p>Mirrors a row of the {@code audit_events} table (V5 Flyway migration).
+ * <p>Mirrors a row of the {@code audits} table (V13 Flyway migration).
  * Kept in the {@code domain} package — zero framework imports — so Wave 2's
  * listener can assemble events from cross-module domain events before
  * handing them to the repository.
@@ -16,10 +16,10 @@ import java.util.UUID;
  * <p>Nullable fields reflect real-world event shapes:
  * <ul>
  *   <li>{@code actorUserId} — null for pre-auth events (e.g. {@link
- *       AuditEventType#LOGIN_FAILED} with an unknown username) or
+ *       AuditType#LOGIN_FAILED} with an unknown username) or
  *       system-originated actions.</li>
  *   <li>{@code targetUserId} — null for events with no distinct target
- *       (e.g. {@link AuditEventType#LOGIN_SUCCESS}, target == actor by
+ *       (e.g. {@link AuditType#LOGIN_SUCCESS}, target == actor by
  *       convention).</li>
  *   <li>{@code details} — optional JSON payload for structured metadata
  *       (e.g. failed-login reason, assigned role code). Null when no extra
@@ -32,17 +32,17 @@ import java.util.UUID;
  * with no primary key, no timestamp, or no type tag is not recoverable as an
  * audit record.
  */
-public record AuditEvent(
+public record Audit(
         UUID id,
         Instant occurredAt,
-        AuditEventType type,
+        AuditType type,
         UUID actorUserId,
         UUID targetUserId,
         String details,
         String requestId
 ) {
 
-    public AuditEvent {
+    public Audit {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(occurredAt, "occurredAt");
         Objects.requireNonNull(type, "type");
@@ -63,15 +63,15 @@ public record AuditEvent(
      * @return a new event with {@code id = UUID.randomUUID()} and
      *         {@code occurredAt = clock.instant()}
      */
-    public static AuditEvent create(
+    public static Audit create(
             Clock clock,
-            AuditEventType type,
+            AuditType type,
             UUID actorUserId,
             UUID targetUserId,
             String details,
             String requestId) {
         Objects.requireNonNull(clock, "clock");
-        return new AuditEvent(
+        return new Audit(
                 UUID.randomUUID(),
                 clock.instant(),
                 type,

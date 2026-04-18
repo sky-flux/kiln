@@ -1,9 +1,9 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditQueryService;
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
-import com.skyflux.kiln.audit.repo.AuditEventJooqRepository;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.repo.AuditRepository;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 import org.springframework.stereotype.Service;
@@ -19,15 +19,15 @@ import java.util.UUID;
 @Service
 class AuditQueryServiceImpl implements AuditQueryService {
 
-    private final AuditEventJooqRepository repo;
+    private final AuditRepository repo;
 
-    AuditQueryServiceImpl(AuditEventJooqRepository repo) {
+    AuditQueryServiceImpl(AuditRepository repo) {
         this.repo = repo;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PageResult<AuditEvent> list(PageQuery page, AuditEventType type, UUID actorUserId, UUID targetUserId) {
+    public PageResult<Audit> list(PageQuery page, AuditType type, UUID actorUserId, UUID targetUserId) {
         return repo.list(page, type, actorUserId, targetUserId);
     }
 }

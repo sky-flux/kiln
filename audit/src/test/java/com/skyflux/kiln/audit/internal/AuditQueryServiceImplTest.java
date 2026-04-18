@@ -1,8 +1,8 @@
 package com.skyflux.kiln.audit.internal;
 
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
-import com.skyflux.kiln.audit.repo.AuditEventJooqRepository;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.repo.AuditRepository;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 import org.junit.jupiter.api.Test;
@@ -28,19 +28,19 @@ class AuditQueryServiceImplTest {
 
     private static final UUID ACTOR = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-    private final AuditEventJooqRepository repo = mock(AuditEventJooqRepository.class);
+    private final AuditRepository repo = mock(AuditRepository.class);
     private final AuditQueryServiceImpl service = new AuditQueryServiceImpl(repo);
 
     @Test
     void listPassesThroughFiltersAndPage() {
         PageQuery page = new PageQuery(1, 20, null);
-        PageResult<AuditEvent> expected = PageResult.of(List.of(sample()), 1L, page);
-        when(repo.list(page, AuditEventType.LOGIN_SUCCESS, ACTOR, null)).thenReturn(expected);
+        PageResult<Audit> expected = PageResult.of(List.of(sample()), 1L, page);
+        when(repo.list(page, AuditType.LOGIN_SUCCESS, ACTOR, null)).thenReturn(expected);
 
-        PageResult<AuditEvent> actual = service.list(page, AuditEventType.LOGIN_SUCCESS, ACTOR, null);
+        PageResult<Audit> actual = service.list(page, AuditType.LOGIN_SUCCESS, ACTOR, null);
 
         assertThat(actual).isSameAs(expected);
-        verify(repo).list(page, AuditEventType.LOGIN_SUCCESS, ACTOR, null);
+        verify(repo).list(page, AuditType.LOGIN_SUCCESS, ACTOR, null);
     }
 
     @Test
@@ -53,11 +53,11 @@ class AuditQueryServiceImplTest {
         verify(repo).list(eq(page), isNull(), isNull(), isNull());
     }
 
-    private static AuditEvent sample() {
-        return new AuditEvent(
+    private static Audit sample() {
+        return new Audit(
                 UUID.randomUUID(),
                 Instant.parse("2026-04-18T09:00:00Z"),
-                AuditEventType.LOGIN_SUCCESS,
+                AuditType.LOGIN_SUCCESS,
                 ACTOR,
                 null,
                 null,

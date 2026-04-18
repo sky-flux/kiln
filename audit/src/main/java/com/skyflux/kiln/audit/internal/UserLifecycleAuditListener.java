@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.user.domain.event.UserRegistered;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -46,6 +46,6 @@ class UserLifecycleAuditListener {
     void on(UserRegistered event) {
         java.util.UUID userId = event.userId().value();
         String details = AuditDetailsJson.from(java.util.Map.of("email", event.email()));
-        auditService.record(AuditEventType.USER_REGISTERED, userId, userId, details, null);
+        auditService.record(AuditType.USER_REGISTERED, userId, userId, details, null);
     }
 }

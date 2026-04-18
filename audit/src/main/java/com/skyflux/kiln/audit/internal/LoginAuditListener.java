@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.user.domain.event.LoginEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -41,7 +41,7 @@ class LoginAuditListener {
     void on(LoginEvent.LoginSucceeded event) {
         UUID userId = event.userId().value();
         auditService.record(
-                AuditEventType.LOGIN_SUCCESS, userId, userId, null, event.requestId());
+                AuditType.LOGIN_SUCCESS, userId, userId, null, event.requestId());
     }
 
     // REQUIRES_NEW mandatory per RestrictedTransactionalEventListenerFactory — see UserLifecycleAuditListener.
@@ -54,6 +54,6 @@ class LoginAuditListener {
         UUID target = event.targetUserId();
         String details = AuditDetailsJson.from(Map.of("reason", event.reason()));
         auditService.record(
-                AuditEventType.LOGIN_FAILED, null, target, details, event.requestId());
+                AuditType.LOGIN_FAILED, null, target, details, event.requestId());
     }
 }

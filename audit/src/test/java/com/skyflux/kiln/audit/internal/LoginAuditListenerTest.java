@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.user.domain.event.LoginEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +37,7 @@ class LoginAuditListenerTest {
         listener.on(event);
 
         verify(auditService).record(
-                AuditEventType.LOGIN_SUCCESS, userId, userId, null, "req-abc");
+                AuditType.LOGIN_SUCCESS, userId, userId, null, "req-abc");
     }
 
     @Test
@@ -48,7 +48,7 @@ class LoginAuditListenerTest {
         listener.on(event);
 
         verify(auditService).record(
-                AuditEventType.LOGIN_FAILED, null, null,
+                AuditType.LOGIN_FAILED, null, null,
                 "{\"reason\":\"UNKNOWN_EMAIL\"}", "req-1");
     }
 
@@ -63,7 +63,7 @@ class LoginAuditListenerTest {
         // Gate 3 C3: actor is null (caller is unauthenticated pre-auth);
         // target is the account under attack.
         verify(auditService).record(
-                AuditEventType.LOGIN_FAILED, null, userId,
+                AuditType.LOGIN_FAILED, null, userId,
                 "{\"reason\":\"WRONG_PASSWORD\"}", "req-2");
     }
 
@@ -76,7 +76,7 @@ class LoginAuditListenerTest {
         listener.on(event);
 
         verify(auditService).record(
-                AuditEventType.LOGIN_FAILED, null, userId,
+                AuditType.LOGIN_FAILED, null, userId,
                 "{\"reason\":\"ACCOUNT_LOCKED\"}", "req-3");
     }
 }

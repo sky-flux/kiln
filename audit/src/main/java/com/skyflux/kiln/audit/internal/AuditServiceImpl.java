@@ -1,9 +1,9 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
-import com.skyflux.kiln.audit.repo.AuditEventJooqRepository;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
+import com.skyflux.kiln.audit.repo.AuditRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,21 +23,21 @@ import java.util.UUID;
 class AuditServiceImpl implements AuditService {
 
     private final Clock clock;
-    private final AuditEventJooqRepository repo;
+    private final AuditRepository repo;
 
-    AuditServiceImpl(Clock clock, AuditEventJooqRepository repo) {
+    AuditServiceImpl(Clock clock, AuditRepository repo) {
         this.clock = clock;
         this.repo = repo;
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public AuditEvent record(AuditEventType type,
-                             UUID actorUserId,
-                             UUID targetUserId,
-                             String details,
-                             String requestId) {
-        AuditEvent event = AuditEvent.create(clock, type, actorUserId, targetUserId, details, requestId);
+    public Audit record(AuditType type,
+                        UUID actorUserId,
+                        UUID targetUserId,
+                        String details,
+                        String requestId) {
+        Audit event = Audit.create(clock, type, actorUserId, targetUserId, details, requestId);
         repo.save(event);
         return event;
     }

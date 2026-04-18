@@ -1,8 +1,8 @@
 package com.skyflux.kiln.audit.internal.web;
 
 import com.skyflux.kiln.audit.api.AuditQueryService;
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 import org.junit.jupiter.api.Test;
@@ -62,10 +62,10 @@ class AuditQueryControllerTest {
     @Test
     void list_returns_page_ok() throws Exception {
         UUID id = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        AuditEvent e = new AuditEvent(
+        Audit e = new Audit(
                 id,
                 Instant.parse("2026-04-18T10:00:00Z"),
-                AuditEventType.LOGIN_SUCCESS,
+                AuditType.LOGIN_SUCCESS,
                 null, null, null, null);
         when(queryService.list(any(), any(), any(), any()))
                 .thenReturn(PageResult.of(List.of(e), 1L, new PageQuery(1, 20, null)));
@@ -93,7 +93,7 @@ class AuditQueryControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<PageQuery> pageCaptor = ArgumentCaptor.forClass(PageQuery.class);
-        verify(queryService).list(pageCaptor.capture(), eq(AuditEventType.LOGIN_FAILED), eq(actor), isNull());
+        verify(queryService).list(pageCaptor.capture(), eq(AuditType.LOGIN_FAILED), eq(actor), isNull());
         PageQuery captured = pageCaptor.getValue();
         assertThat(captured.page()).isEqualTo(2);
         assertThat(captured.size()).isEqualTo(50);

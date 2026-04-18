@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.api;
 
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
 
 import java.util.UUID;
 
@@ -28,9 +28,9 @@ public interface AuditService {
      * @return the persisted event, including the newly-generated {@code id}
      *         and {@code occurredAt}
      */
-    AuditEvent record(AuditEventType type,
-                      UUID actorUserId,
-                      UUID targetUserId,
-                      String details,
-                      String requestId);
+    Audit record(AuditType type,
+                 UUID actorUserId,
+                 UUID targetUserId,
+                 String details,
+                 String requestId);
 }

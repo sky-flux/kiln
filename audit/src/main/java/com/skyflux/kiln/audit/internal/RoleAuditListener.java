@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.auth.domain.event.RoleEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -40,7 +40,7 @@ class RoleAuditListener {
     void on(RoleEvent.RoleAssigned event) {
         String details = AuditDetailsJson.from(java.util.Map.of("role", event.role().value()));
         auditService.record(
-                AuditEventType.ROLE_ASSIGNED, null, event.userId(), details, null);
+                AuditType.ROLE_ASSIGNED, null, event.userId(), details, null);
     }
 
     // REQUIRES_NEW mandatory per RestrictedTransactionalEventListenerFactory — see UserLifecycleAuditListener.
@@ -49,6 +49,6 @@ class RoleAuditListener {
     void on(RoleEvent.RoleRevoked event) {
         String details = AuditDetailsJson.from(java.util.Map.of("role", event.role().value()));
         auditService.record(
-                AuditEventType.ROLE_REVOKED, null, event.userId(), details, null);
+                AuditType.ROLE_REVOKED, null, event.userId(), details, null);
     }
 }

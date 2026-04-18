@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.internal;
 
 import com.skyflux.kiln.audit.api.AuditService;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.user.domain.event.UserRegistered;
 import com.skyflux.kiln.user.domain.model.UserId;
 import org.junit.jupiter.api.Test;
@@ -34,12 +34,12 @@ class UserLifecycleAuditListenerTest {
     void userRegisteredRecordsUserRegisteredWithActorAndTargetAsSameUserId() {
         UUID userId = UUID.randomUUID();
         UserRegistered event = new UserRegistered(
-                new UserId(userId), "alice@example.com", Instant.parse("2026-04-18T10:00:00Z"));
+                new UserId(userId), java.util.UUID.randomUUID(), "alice@example.com", Instant.parse("2026-04-18T10:00:00Z"));
 
         listener.on(event);
 
         verify(auditService).record(
-                argThat(t -> t == AuditEventType.USER_REGISTERED),
+                argThat(t -> t == AuditType.USER_REGISTERED),
                 argThat(actor -> userId.equals(actor)),
                 argThat(target -> userId.equals(target)),
                 argThat(details -> details != null && details.contains("email")),

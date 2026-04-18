@@ -1,7 +1,7 @@
 package com.skyflux.kiln.audit.api;
 
-import com.skyflux.kiln.audit.domain.AuditEvent;
-import com.skyflux.kiln.audit.domain.AuditEventType;
+import com.skyflux.kiln.audit.domain.Audit;
+import com.skyflux.kiln.audit.domain.AuditType;
 import com.skyflux.kiln.common.result.PageQuery;
 import com.skyflux.kiln.common.result.PageResult;
 
@@ -24,12 +24,12 @@ public interface AuditQueryService {
      * Paginated list filtered by optional type, actor, and/or target.
      *
      * @param page          pagination window (required; non-null)
-     * @param type          optional event-type filter; {@code null} = match any type
+     * @param type          optional audit-type filter; {@code null} = match any type
      * @param actorUserId   optional actor filter; {@code null} = match any actor
      * @param targetUserId  optional target filter; {@code null} = match any target.
      *                      Gate 3 M2: compliance use-cases ask "everything that
      *                      happened to user X" — including login failures which
      *                      legitimately have null actor but non-null target.
      */
-    PageResult<AuditEvent> list(PageQuery page, AuditEventType type, UUID actorUserId, UUID targetUserId);
+    PageResult<Audit> list(PageQuery page, AuditType type, UUID actorUserId, UUID targetUserId);
 }
