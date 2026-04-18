@@ -4,7 +4,7 @@ import com.skyflux.kiln.common.exception.AppCode;
 import com.skyflux.kiln.common.exception.AppException;
 import com.skyflux.kiln.order.application.port.in.CancelOrderUseCase;
 import com.skyflux.kiln.order.application.port.out.OrderRepository;
-import com.skyflux.kiln.order.domain.event.OrderEvent;
+import com.skyflux.kiln.order.api.OrderEvent;
 import com.skyflux.kiln.order.domain.model.Order;
 import com.skyflux.kiln.order.domain.model.OrderId;
 import org.springframework.context.ApplicationEventPublisher;

@@ -10,6 +10,7 @@ import com.skyflux.kiln.order.application.port.in.CreateOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.DeliverOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.GetOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.ListOrdersUseCase;
+import com.skyflux.kiln.order.application.port.in.PayOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.ShipOrderUseCase;
 import com.skyflux.kiln.order.domain.model.OrderId;
 import com.skyflux.kiln.tenant.api.TenantContext;
@@ -40,6 +41,7 @@ class OrderController {
 
     private final CreateOrderUseCase createUseCase;
     private final ConfirmOrderUseCase confirmUseCase;
+    private final PayOrderUseCase payUseCase;
     private final ShipOrderUseCase shipUseCase;
     private final DeliverOrderUseCase deliverUseCase;
     private final CancelOrderUseCase cancelUseCase;
@@ -48,6 +50,7 @@ class OrderController {
 
     OrderController(CreateOrderUseCase createUseCase,
                     ConfirmOrderUseCase confirmUseCase,
+                    PayOrderUseCase payUseCase,
                     ShipOrderUseCase shipUseCase,
                     DeliverOrderUseCase deliverUseCase,
                     CancelOrderUseCase cancelUseCase,
@@ -55,6 +58,7 @@ class OrderController {
                     ListOrdersUseCase listUseCase) {
         this.createUseCase = createUseCase;
         this.confirmUseCase = confirmUseCase;
+        this.payUseCase = payUseCase;
         this.shipUseCase = shipUseCase;
         this.deliverUseCase = deliverUseCase;
         this.cancelUseCase = cancelUseCase;
@@ -91,6 +95,11 @@ class OrderController {
     @PostMapping("/{id}/confirm")
     R<OrderResponse> confirm(@PathVariable String id) {
         return R.ok(OrderResponse.from(confirmUseCase.execute(OrderId.of(id))));
+    }
+
+    @PostMapping("/{id}/pay")
+    R<OrderResponse> pay(@PathVariable String id) {
+        return R.ok(OrderResponse.from(payUseCase.execute(OrderId.of(id))));
     }
 
     @PostMapping("/{id}/ship")

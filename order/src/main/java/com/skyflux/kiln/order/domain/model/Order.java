@@ -54,7 +54,8 @@ public final class Order {
     }
 
     public Order confirm()  { return transition(OrderStatus.CONFIRMED, OrderStatus.PENDING); }
-    public Order ship()     { return transition(OrderStatus.SHIPPED, OrderStatus.CONFIRMED); }
+    public Order pay()      { return transition(OrderStatus.PAID, OrderStatus.CONFIRMED); }
+    public Order ship()     { return transition(OrderStatus.SHIPPED, OrderStatus.PAID); }
     public Order deliver()  { return transition(OrderStatus.DELIVERED, OrderStatus.SHIPPED); }
     public Order cancel()   { return transition(OrderStatus.CANCELLED, OrderStatus.PENDING, OrderStatus.CONFIRMED); }
 

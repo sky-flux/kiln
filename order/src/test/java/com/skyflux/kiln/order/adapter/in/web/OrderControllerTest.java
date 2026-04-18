@@ -10,6 +10,7 @@ import com.skyflux.kiln.order.application.port.in.CreateOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.DeliverOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.GetOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.ListOrdersUseCase;
+import com.skyflux.kiln.order.application.port.in.PayOrderUseCase;
 import com.skyflux.kiln.order.application.port.in.ShipOrderUseCase;
 import com.skyflux.kiln.order.domain.model.Order;
 import com.skyflux.kiln.order.domain.model.OrderId;
@@ -51,6 +52,7 @@ class OrderControllerTest {
     @MockitoBean CancelOrderUseCase cancelUseCase;
     @MockitoBean GetOrderUseCase getUseCase;
     @MockitoBean ListOrdersUseCase listUseCase;
+    @MockitoBean PayOrderUseCase payUseCase;
 
     @Autowired MockMvc mvc;
 
@@ -67,8 +69,9 @@ class OrderControllerTest {
         return switch (status) {
             case PENDING -> base;
             case CONFIRMED -> base.confirm();
-            case SHIPPED -> base.confirm().ship();
-            case DELIVERED -> base.confirm().ship().deliver();
+            case PAID -> base.confirm().pay();
+            case SHIPPED -> base.confirm().pay().ship();
+            case DELIVERED -> base.confirm().pay().ship().deliver();
             case CANCELLED -> base.cancel();
         };
     }
@@ -133,5 +136,15 @@ class OrderControllerTest {
         mvc.perform(get("/api/v1/orders/" + order.id().value()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    @Test
+    void shouldPayOrderAndReturn200() throws Exception {
+        Order paid = sampleOrder(OrderStatus.PAID);
+        when(payUseCase.execute(any(OrderId.class))).thenReturn(paid);
+
+        mvc.perform(post("/api/v1/orders/" + paid.id().value() + "/pay"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PAID"));
     }
 }

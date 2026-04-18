@@ -4,7 +4,7 @@ import com.skyflux.kiln.common.exception.AppException;
 import com.skyflux.kiln.common.money.Money;
 import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.order.application.port.out.OrderRepository;
-import com.skyflux.kiln.order.domain.event.OrderEvent;
+import com.skyflux.kiln.order.api.OrderEvent;
 import com.skyflux.kiln.order.domain.model.Order;
 import com.skyflux.kiln.order.domain.model.OrderId;
 import com.skyflux.kiln.order.domain.model.OrderItem;
@@ -73,11 +73,11 @@ class OrderStateServiceTest {
 
     @Test
     void shipShouldTransitionToShipped() {
-        Order confirmed = makePendingOrder().confirm();
-        when(repo.findById(confirmed.id())).thenReturn(Optional.of(confirmed));
+        Order paid = makePendingOrder().confirm().pay();
+        when(repo.findById(paid.id())).thenReturn(Optional.of(paid));
         ShipOrderService service = new ShipOrderService(repo);
 
-        Order result = service.execute(confirmed.id());
+        Order result = service.execute(paid.id());
 
         assertThat(result.status()).isEqualTo(OrderStatus.SHIPPED);
         verify(repo).save(any(Order.class));
@@ -87,7 +87,7 @@ class OrderStateServiceTest {
 
     @Test
     void deliverShouldTransitionToDelivered() {
-        Order shipped = makePendingOrder().confirm().ship();
+        Order shipped = makePendingOrder().confirm().pay().ship();
         when(repo.findById(shipped.id())).thenReturn(Optional.of(shipped));
         DeliverOrderService service = new DeliverOrderService(repo);
 

@@ -99,7 +99,8 @@ class ArchitectureTest {
                     .that().resideInAPackage("..domain.event..")
                     .and().areNotAnonymousClasses()
                     .and().doNotHaveSimpleName("package-info")
-                    .should(beSealedInterfaceOrRecord());
+                    .should(beSealedInterfaceOrRecord())
+                    .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule inbound_adapters_must_not_use_outbound_ports =

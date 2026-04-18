@@ -31,15 +31,26 @@ class OrderTest {
         assertThatThrownBy(() -> sampleOrder().confirm().confirm())
             .isInstanceOf(InvalidOrderTransitionException.class);
     }
-    @Test void shouldShipConfirmedOrder() {
-        assertThat(sampleOrder().confirm().ship().status()).isEqualTo(OrderStatus.SHIPPED);
+    @Test void shouldPayConfirmedOrder() {
+        assertThat(sampleOrder().confirm().pay().status()).isEqualTo(OrderStatus.PAID);
+    }
+    @Test void shouldRejectPayingNonConfirmedOrder() {
+        assertThatThrownBy(() -> sampleOrder().pay())
+            .isInstanceOf(InvalidOrderTransitionException.class);
+    }
+    @Test void shouldNotCancelPaidOrder() {
+        assertThatThrownBy(() -> sampleOrder().confirm().pay().cancel())
+            .isInstanceOf(InvalidOrderTransitionException.class);
+    }
+    @Test void shouldShipPaidOrder() {
+        assertThat(sampleOrder().confirm().pay().ship().status()).isEqualTo(OrderStatus.SHIPPED);
     }
     @Test void shouldRejectShippingPendingOrder() {
         assertThatThrownBy(() -> sampleOrder().ship())
             .isInstanceOf(InvalidOrderTransitionException.class);
     }
     @Test void shouldDeliverShippedOrder() {
-        assertThat(sampleOrder().confirm().ship().deliver().status()).isEqualTo(OrderStatus.DELIVERED);
+        assertThat(sampleOrder().confirm().pay().ship().deliver().status()).isEqualTo(OrderStatus.DELIVERED);
     }
     @Test void shouldCancelPendingOrder() {
         assertThat(sampleOrder().cancel().status()).isEqualTo(OrderStatus.CANCELLED);
@@ -47,8 +58,12 @@ class OrderTest {
     @Test void shouldCancelConfirmedOrder() {
         assertThat(sampleOrder().confirm().cancel().status()).isEqualTo(OrderStatus.CANCELLED);
     }
+    @Test void shouldRejectCancellingShippedOrder() {
+        assertThatThrownBy(() -> sampleOrder().confirm().pay().ship().cancel())
+            .isInstanceOf(InvalidOrderTransitionException.class);
+    }
     @Test void shouldRejectCancellingDeliveredOrder() {
-        assertThatThrownBy(() -> sampleOrder().confirm().ship().deliver().cancel())
+        assertThatThrownBy(() -> sampleOrder().confirm().pay().ship().deliver().cancel())
             .isInstanceOf(InvalidOrderTransitionException.class);
     }
     @Test void shouldRejectEmptyItemList() {

@@ -3,7 +3,7 @@ package com.skyflux.kiln.order.application.usecase;
 import com.skyflux.kiln.common.util.Ids;
 import com.skyflux.kiln.order.application.port.in.CreateOrderUseCase;
 import com.skyflux.kiln.order.application.port.out.OrderRepository;
-import com.skyflux.kiln.order.domain.event.OrderEvent;
+import com.skyflux.kiln.order.api.OrderEvent;
 import com.skyflux.kiln.order.domain.model.Order;
 import com.skyflux.kiln.order.domain.model.OrderStatus;
 import org.junit.jupiter.api.Test;
