@@ -84,12 +84,12 @@ jooq {
                             // keeps the task robust regardless of invocation cwd.
                             property {
                                 key = 'scripts'
-                                // V*.sql glob matches all versioned migrations (V1__…, V7__…, etc.) but
-                                // NOT R__rls.sql, which contains PG-specific DDL (ENABLE ROW LEVEL SECURITY,
-                                // CREATE POLICY) that H2's DDLDatabase cannot parse.
-                                // The explicit directory trailing slash does NOT work here because it would
-                                // include R__rls.sql; a glob pattern matching only V-prefix files is the
-                                // correct and robust solution.
+                                // V*.sql glob matches all versioned migrations but excludes R__rls.sql
+                                // (PG-only ENABLE ROW LEVEL SECURITY / CREATE POLICY — H2 cannot parse these).
+                                // V13 uses ALTER INDEX ... RENAME TO which H2 silently skips; the TABLE rename
+                                // (ALTER TABLE RENAME TO audits) IS processed by H2 correctly, so jOOQ
+                                // generates the Audits table class. Flyway applies the real V13 (with index
+                                // renames) to PostgreSQL.
                                 value = "${project.projectDir}/src/main/resources/db/migration/V*.sql"
                             }
                             property { key = 'sort'; value = 'flyway' }
